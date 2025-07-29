@@ -11,7 +11,8 @@ function SciMLBase.solve!(
         cache::PSOCache, opt::ParallelPSOKernel, args...; maxiters = 100, kwargs...)
     prob = cache.prob
     t0 = time()
-    gbest, particles = vectorized_solve!(cache.prob,
+    gbest,
+    particles = vectorized_solve!(cache.prob,
         cache.gbest,
         cache.particles,
         opt,
@@ -30,7 +31,8 @@ function SciMLBase.solve!(
         cache::PSOCache, opt::ParallelSyncPSOKernel, args...; maxiters = 100, kwargs...)
     prob = cache.prob
     t0 = time()
-    gbest, particles = vectorized_solve!(prob,
+    gbest,
+    particles = vectorized_solve!(prob,
         cache.gbest,
         cache.particles,
         opt,
@@ -73,7 +75,8 @@ function pso_solve(prob::OptimizationProblem,
         kwargs...)
     init_gbest, particles = init_particles(prob, opt, typeof(prob.u0))
     t0 = time()
-    gbest, particles = vectorized_solve!(prob,
+    gbest,
+    particles = vectorized_solve!(prob,
         init_gbest,
         particles,
         opt,
