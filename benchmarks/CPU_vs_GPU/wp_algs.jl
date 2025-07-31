@@ -105,28 +105,32 @@ end
 for n_particles in Ns
     @info n_particles
 
-    obj, sol_time = solve_run(prob,
+    obj,
+    sol_time = solve_run(prob,
         ParallelSyncPSOKernel(n_particles; backend = CPU()),
         500)
 
     push!(cpu_loss, obj)
     push!(cpu_times, sol_time)
 
-    obj, sol_time = solve_run(prob,
+    obj,
+    sol_time = solve_run(prob,
         ParallelSyncPSOKernel(n_particles; backend = CUDABackend()),
         500)
 
     push!(gpu_sync_loss, obj)
     push!(gpu_sync_times, sol_time)
 
-    obj, sol_time = solve_run(prob,
+    obj,
+    sol_time = solve_run(prob,
         ParallelPSOKernel(n_particles; backend = CUDABackend(), global_update = false),
         500)
 
     push!(gpu_async_loss, obj)
     push!(gpu_async_times, sol_time)
 
-    obj, sol_time = solve_run(prob,
+    obj,
+    sol_time = solve_run(prob,
         ParallelPSOKernel(n_particles; backend = CUDABackend(), global_update = true),
         500;
         runs = 2)
@@ -134,7 +138,8 @@ for n_particles in Ns
     push!(gpu_queue_lock_loss, obj)
     push!(gpu_queue_lock_times, sol_time)
 
-    obj, solve_time = solve_run(prob,
+    obj,
+    solve_time = solve_run(prob,
         ParallelParticleSwarms.HybridPSO(; backend = CUDABackend(),
             pso = ParallelParticleSwarms.ParallelPSOKernel(n_particles;
                 global_update = false,
@@ -330,7 +335,8 @@ begin
     for iters in tot_maxiters
         @info iters
 
-        obj, sol_time = solve_run(uncons_prob,
+        obj,
+        sol_time = solve_run(uncons_prob,
             LBFGS(),
             iters;
             reltol = -Inf,
@@ -362,14 +368,16 @@ begin
         # ParallelPSOKernel(n_particles; backend = CUDABackend(), global_update = true),
         # maxiters = iters)
 
-        obj, sol_time = solve_run(prob,
+        obj,
+        sol_time = solve_run(prob,
             ParallelPSOKernel(n_particles; backend = CUDABackend(), global_update = true),
             iters)
 
         push!(queue_lock_losses, obj)
         push!(queue_lock_time, sol_time)
 
-        obj, sol_time = solve_run(prob,
+        obj,
+        sol_time = solve_run(prob,
             ParallelSyncPSOKernel(n_particles; backend = CPU()),
             iters)
 
@@ -388,7 +396,8 @@ begin
         #         local_opt = ParallelParticleSwarms.LBFGS()), maxiters = iters,
         #         local_maxiters = iters)
 
-        obj, solve_time = solve_run(prob,
+        obj,
+        solve_time = solve_run(prob,
             ParallelParticleSwarms.HybridPSO(; backend = CUDABackend(),
                 pso = ParallelParticleSwarms.ParallelPSOKernel(n_particles;
                     global_update = false,
@@ -402,7 +411,8 @@ begin
 
         # sol = solve(arr_prob, BBO_adaptive_de_rand_1_bin_radiuslimited(), maxiters = iters)
 
-        obj, sol_time = solve_run(arr_prob,
+        obj,
+        sol_time = solve_run(arr_prob,
             BBO_adaptive_de_rand_1_bin_radiuslimited(),
             iters * 100)
 

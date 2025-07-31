@@ -47,8 +47,9 @@ function SciMLBase.solve!(
     sol_bfgs = (x -> isnan(x) ? convert(eltype(prob.u0), Inf) : x).(sol_bfgs)
 
     minobj, ind = findmin(sol_bfgs)
-    sol_u, sol_obj = minobj > sol_pso.objective ? (sol_pso.u, sol_pso.objective) :
-                     (view(result, ind), minobj)
+    sol_u,
+    sol_obj = minobj > sol_pso.objective ? (sol_pso.u, sol_pso.objective) :
+              (view(result, ind), minobj)
     t1 = time()
 
     # @show sol_pso.stats.time

@@ -77,7 +77,8 @@ for n_particles in Ns
     ## CPU solve
     backend = CPU()
     opt = ParallelSyncPSOKernel(n_particles; backend)
-    init_gbest, particles = ParallelParticleSwarms.init_particles(
+    init_gbest,
+    particles = ParallelParticleSwarms.init_particles(
         prob, opt, typeof(prob.u0))
 
     particles_eltype = eltype(particles) === Float64 ? Float32 : eltype(particles)

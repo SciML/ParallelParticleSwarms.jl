@@ -100,7 +100,8 @@ using Adapt
 backend = CUDABackend()
 
 ## Initialize Particles
-gbest, particles = ParallelParticleSwarms.init_particles(soptprob,
+gbest,
+particles = ParallelParticleSwarms.init_particles(soptprob,
     ParallelSyncPSOKernel(n_particles; backend = CUDABackend()),
     typeof(prob.u0))
 
