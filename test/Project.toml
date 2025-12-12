@@ -8,3 +8,11 @@ SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
 SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[compat]
+KernelAbstractions = "0.9.39"
+Optimization = "5.2.0"
+QuasiMonteCarlo = "0.3.3"
+SafeTestsets = "0.1.0"
+SciMLBase = "2.128.0"
+StaticArrays = "1.9.15"
