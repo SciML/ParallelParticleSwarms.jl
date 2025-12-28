@@ -30,3 +30,4 @@ sol = solve(prob,
     ParallelSyncPSOKernel(1000, backend = CUDA.CUDABackend()),
     maxiters = 500)
 ```
+
