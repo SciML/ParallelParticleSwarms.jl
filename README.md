@@ -10,6 +10,7 @@ Accelerating convex/non-convex optimization with GPUs using Particle-Swarm based
 
 Supports Julia's generic SciML interface.
 
+
 ```julia
 
 using ParallelParticleSwarms, StaticArrays, CUDA
