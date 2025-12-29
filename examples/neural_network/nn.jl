@@ -54,5 +54,5 @@ prob = OptimizationProblem((u, data) -> lenetloss(data, u), p, xtrain; lb = lb, 
 n_particles = 1000
 
 sol = solve(prob,
-    ParallelPSOKernel(n_particles; threaded = true),
+    ParallelPSOKernel(n_particles),
     maxiters = 1000)
