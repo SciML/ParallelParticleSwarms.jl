@@ -11,18 +11,22 @@ end
 
 """
 ```julia
-ParallelPSOKernel(num_particles = 100)
+ParallelPSOKernel(num_particles; global_update = true, backend = CPU())
 ```
 
 Particle Swarm Optimization on a GPU. Creates and launches a kernel which updates the particle states in parallel
 on a GPU. Static Arrays for parameters in the `OptimizationProblem` are required for successful GPU compilation.
 
-## Positional arguments:
+## Arguments
 
-- num_particles: Number of particles in the simulation
-- global_update: defaults to `true`. Setting it to false allows particles to evolve completely on their own,
+- `num_particles`: Number of particles in the simulation (positional argument)
+
+## Keyword Arguments
+
+- `global_update`: defaults to `true`. Setting it to `false` allows particles to evolve completely on their own,
   i.e. no information is sent about the global best position.
-- backend: defaults to `CPU()`. The KernelAbstractions backend for performing the computation.
+- `backend`: defaults to `CPU()`. The KernelAbstractions backend for performing the computation
+  (e.g., `CUDA.CUDABackend()` for NVIDIA GPUs).
 
 ## Limitations
 
@@ -42,16 +46,20 @@ end
 
 """
 ```julia
-ParallelSyncPSOKernel(num_particles = 100)
+ParallelSyncPSOKernel(num_particles; backend = CPU())
 ```
 
 Particle Swarm Optimization on a GPU. Creates and launches a kernel which updates the particle states in parallel
 on a GPU. However, it requires a synchronization after each generation to calculate the global best position of the particles.
 
-## Positional arguments:
+## Arguments
 
-- num_particles: Number of particles in the simulation
-- backend: defaults to `CPU()`. The KernelAbstractions backend for performing the computation.
+- `num_particles`: Number of particles in the simulation (positional argument)
+
+## Keyword Arguments
+
+- `backend`: defaults to `CPU()`. The KernelAbstractions backend for performing the computation
+  (e.g., `CUDA.CUDABackend()` for NVIDIA GPUs).
 
 """
 struct ParallelSyncPSOKernel{Backend, T, G, H} <: PSOAlgorithm
@@ -64,15 +72,15 @@ end
 
 """
 ```julia
-ParallelPSOArray(num_particles = 100)
+ParallelPSOArray(num_particles)
 ```
+
 Particle Swarm Optimization on a CPU. It keeps the arrays used in particle data structure
 to be Julia's `Array`, which may be better for high-dimensional problems.
 
-## Positional arguments:
+## Arguments
 
-- num_particles: Number of particles in the simulation
-
+- `num_particles`: Number of particles in the simulation (positional argument)
 
 ## Limitations
 
@@ -90,13 +98,14 @@ end
 
 """
 ```julia
-SerialPSO(num_particles = 100)
+SerialPSO(num_particles)
 ```
+
 Serial Particle Swarm Optimization on a CPU.
 
-## Positional arguments:
+## Arguments
 
-- num_particles: Number of particles in the simulation
+- `num_particles`: Number of particles in the simulation (positional argument)
 
 """
 struct SerialPSO{T, G, H} <: PSOAlgorithm
