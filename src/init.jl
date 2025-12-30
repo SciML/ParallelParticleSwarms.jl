@@ -159,8 +159,8 @@ end
 
 function Base.setproperty!(cache::HybridPSOCache, name::Symbol, val)
     if name ∈ (:start_points, :pso_cache, :alg)
-        return setfield!(cache, name, val)
+        error("Cannot set property $name on immutable HybridPSOCache")
     else
-        return setproperty!(cache.pso_cache, name, val)
+        return setproperty!(getfield(cache, :pso_cache), name, val)
     end
 end

@@ -16,12 +16,12 @@ function uniform(dim::Int, lb::AbstractArray{T}, ub::AbstractArray{T}) where {T}
     return arr
 end
 
-function _gen_sampling_kernel(prob, sampling::QuasiMonteCarlo.SamplingAlgorithm)
-    dim = length(prob.u0)
+function _gen_sampling_kernel(prob, num_particles::Int, sampling::QuasiMonteCarlo.SamplingAlgorithm)
     lb = prob.lb
     ub = prob.ub
 
-    positions = QuasiMonteCarlo.sample(num_particles, lb, ub, sampler)
+    positions = QuasiMonteCarlo.sample(num_particles, lb, ub, sampling)
+    return positions
 end
 
 @kernel function gpu_init_particles!(
@@ -177,7 +177,9 @@ function init_particles(prob, opt, ::Type{T}) where {T <: SArray}
     p = prob.p
     num_particles = opt.num_particles
 
-    if lb === nothing || (all(isinf, lb) && all(isinf, ub))
+    unbounded = lb === nothing || (all(isinf, lb) && all(isinf, ub))
+
+    if unbounded
         gbest_position = StaticArrays.sacollect(T,
             ifelse(
                 abs(prob.u0[i]) > 0, prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i]),
@@ -195,16 +197,14 @@ function init_particles(prob, opt, ::Type{T}) where {T <: SArray}
     end
     particles = SPSOParticle{T, eltype(T)}[]
 
-    if !(lb === nothing || (all(isinf, lb) && all(isinf, ub)))
-        positions = QuasiMonteCarlo.sample(num_particles, lb, ub, LatinHypercubeSample())
-    end
+    positions = unbounded ? nothing : QuasiMonteCarlo.sample(num_particles, lb, ub, LatinHypercubeSample())
 
     for i in 1:num_particles
-        if lb === nothing || (all(isinf, lb) && all(isinf, ub))
+        if unbounded
             @inbounds position = StaticArrays.sacollect(T,
-                ifelse(abs(prob.u0[i]) > 0,
-                    prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i]),
-                    rand(eltype(prob.u0))) for i in 1:dim)
+                ifelse(abs(prob.u0[j]) > 0,
+                    prob.u0[j] + rand(eltype(prob.u0)) * abs(prob.u0[j]),
+                    rand(eltype(prob.u0))) for j in 1:dim)
         else
             @inbounds position = StaticArrays.sacollect(T, positions[j, i] for j in 1:dim)
         end
@@ -238,7 +238,9 @@ function init_particles(prob, opt, ::Type{T}) where {T <: AbstractArray}
     p = prob.p
     num_particles = opt.num_particles
 
-    if lb === nothing || (all(isinf, lb) && all(isinf, ub))
+    unbounded = lb === nothing || (all(isinf, lb) && all(isinf, ub))
+
+    if unbounded
         gbest_position = Array{eltype(prob.u0), 1}(undef, dim)
         for i in 1:dim
             if abs(prob.u0[i]) > 0
@@ -254,18 +256,16 @@ function init_particles(prob, opt, ::Type{T}) where {T <: AbstractArray}
 
     particles = MPSOParticle[]
 
-    if !(lb === nothing || (all(isinf, lb) && all(isinf, ub)))
-        positions = QuasiMonteCarlo.sample(num_particles, lb, ub, LatinHypercubeSample())
-    end
+    positions = unbounded ? nothing : QuasiMonteCarlo.sample(num_particles, lb, ub, LatinHypercubeSample())
 
     for i in 1:num_particles
-        if lb === nothing || (all(isinf, lb) && all(isinf, ub))
+        if unbounded
             position = Array{eltype(prob.u0), 1}(undef, dim)
-            for i in 1:dim
-                if abs(prob.u0[i]) > 0
-                    position[i] = prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i])
+            for j in 1:dim
+                if abs(prob.u0[j]) > 0
+                    position[j] = prob.u0[j] + rand(eltype(prob.u0)) * abs(prob.u0[j])
                 else
-                    position[i] = rand(eltype(prob.u0))
+                    position[j] = rand(eltype(prob.u0))
                 end
             end
         else
