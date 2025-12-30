@@ -1,6 +1,6 @@
 name = "ParallelParticleSwarms"
 uuid = "ab63da0c-63b4-40fa-a3b7-d2cba5be6419"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["Utkarsh <rajpututkarsh530@gmail.com> and contributors"]
 
 [deps]
