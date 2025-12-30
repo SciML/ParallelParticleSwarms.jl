@@ -28,9 +28,9 @@ function SciMLBase.solve!(
     kernel = simplebfgs_run!(backend)
     nlprob = SimpleNonlinearSolve.ImmutableNonlinearProblem{false}(∇f, prob.u0, prob.p)
 
-    nlalg = LocalOpt isa LBFGS ?
+    nlalg = opt.local_opt isa LBFGS ?
             SimpleLimitedMemoryBroyden(;
-        threshold = local_opt.threshold,
+        threshold = opt.local_opt.threshold,
         linesearch = Val(true)) : SimpleBroyden(; linesearch = Val(true))
 
     t0 = time()
