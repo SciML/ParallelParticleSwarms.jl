@@ -71,6 +71,7 @@ include("init.jl")
 include("./solve.jl")
 include("./bfgs.jl")
 include("./hybrid.jl")
+include("./precompilation.jl")
 
 export ParallelPSOKernel,
        ParallelSyncPSOKernel, ParallelPSOArray, SerialPSO

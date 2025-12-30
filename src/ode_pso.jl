@@ -1,4 +1,4 @@
-@kernel function _update_particle_states!(gpu_particles, lb, ub, gbest, w; c1 = 1.4962f0,
+@kernel function ode_update_particle_states!(gpu_particles, lb, ub, gbest, w; c1 = 1.4962f0,
         c2 = 1.4962f0)
     i = @index(Global, Linear)
     if i <= length(gpu_particles)
@@ -24,7 +24,7 @@
     end
 end
 
-@kernel function _update_particle_costs!(losses, gpu_particles)
+@kernel function ode_update_particle_costs!(losses, gpu_particles)
     i = @index(Global, Linear)
     if i <= length(losses)
         @inbounds particle = gpu_particles[i]
@@ -55,8 +55,8 @@ function parameter_estim_ode!(prob::ODEProblem, cache,
         maxiters = 100, kwargs...)
     (losses, gpu_particles, gpu_data, gbest) = cache
     backend = get_backend(gpu_particles)
-    update_states! = ParallelParticleSwarms._update_particle_states!(backend)
-    update_costs! = ParallelParticleSwarms._update_particle_costs!(backend)
+    update_states! = ParallelParticleSwarms.ode_update_particle_states!(backend)
+    update_costs! = ParallelParticleSwarms.ode_update_particle_costs!(backend)
 
     improb = make_prob_compatible(prob)
 
@@ -109,8 +109,8 @@ function parameter_estim_ode!(prob::ODEProblem, cache,
         maxiters = 100, kwargs...)
     (losses, gpu_particles, gpu_data, gbest) = cache
     backend = get_backend(gpu_particles)
-    update_states! = ParallelParticleSwarms._update_particle_states!(backend)
-    update_costs! = ParallelParticleSwarms._update_particle_costs!(backend)
+    update_states! = ParallelParticleSwarms.ode_update_particle_states!(backend)
+    update_costs! = ParallelParticleSwarms.ode_update_particle_costs!(backend)
 
     improb = make_prob_compatible(prob)
 
