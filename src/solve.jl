@@ -3,87 +3,108 @@ function get_pos(particle)
 end
 
 function SciMLBase.solve!(
-        cache::Union{PSOCache, HybridPSOCache}, args...; maxiters = 100, kwargs...)
-    solve!(cache, cache.alg, args...; maxiters, kwargs...)
+        cache::Union{PSOCache, HybridPSOCache}, args...; maxiters = 100, kwargs...
+    )
+    return solve!(cache, cache.alg, args...; maxiters, kwargs...)
 end
 
 function SciMLBase.solve!(
-        cache::PSOCache, opt::ParallelPSOKernel, args...; maxiters = 100, kwargs...)
+        cache::PSOCache, opt::ParallelPSOKernel, args...; maxiters = 100, kwargs...
+    )
     prob = cache.prob
     t0 = time()
     gbest,
-    particles = vectorized_solve!(cache.prob,
+        particles = vectorized_solve!(
+        cache.prob,
         cache.gbest,
         cache.particles,
         opt,
         Val(opt.global_update),
         args...;
-        maxiters, kwargs...)
+        maxiters, kwargs...
+    )
     t1 = time()
 
     particles_positions = get_pos.(particles)
-    SciMLBase.build_solution(SciMLBase.DefaultOptimizationCache(prob.f, prob.p), opt,
+    return SciMLBase.build_solution(
+        SciMLBase.DefaultOptimizationCache(prob.f, prob.p), opt,
         gbest.position, prob.f(gbest.position, prob.p), original = particles_positions,
-        stats = Optimization.OptimizationStats(; time = t1 - t0))
+        stats = Optimization.OptimizationStats(; time = t1 - t0)
+    )
 end
 
 function SciMLBase.solve!(
-        cache::PSOCache, opt::ParallelSyncPSOKernel, args...; maxiters = 100, kwargs...)
+        cache::PSOCache, opt::ParallelSyncPSOKernel, args...; maxiters = 100, kwargs...
+    )
     prob = cache.prob
     t0 = time()
     gbest,
-    particles = vectorized_solve!(prob,
+        particles = vectorized_solve!(
+        prob,
         cache.gbest,
         cache.particles,
         opt,
         args...;
         maxiters,
-        kwargs...)
+        kwargs...
+    )
     t1 = time()
 
     particles_positions = get_pos.(particles)
-    SciMLBase.build_solution(SciMLBase.DefaultOptimizationCache(prob.f, prob.p), opt,
+    return SciMLBase.build_solution(
+        SciMLBase.DefaultOptimizationCache(prob.f, prob.p), opt,
         gbest.position, prob.f(gbest.position, prob.p), original = particles_positions,
-        stats = Optimization.OptimizationStats(; time = t1 - t0))
+        stats = Optimization.OptimizationStats(; time = t1 - t0)
+    )
 end
 
-function SciMLBase.solve(prob::OptimizationProblem,
+function SciMLBase.solve(
+        prob::OptimizationProblem,
         opt::Union{ParallelPSOKernel, ParallelSyncPSOKernel, HybridPSO},
-        args...; maxiters = 100, kwargs...)
-    solve!(init(prob, opt, args...; kwargs...), opt, args...; maxiters, kwargs...)
+        args...; maxiters = 100, kwargs...
+    )
+    return solve!(init(prob, opt, args...; kwargs...), opt, args...; maxiters, kwargs...)
 end
 
-function SciMLBase.__solve(prob::OptimizationProblem,
+function SciMLBase.__solve(
+        prob::OptimizationProblem,
         opt::PSOAlgorithm,
         args...;
         maxiters = 100,
-        kwargs...)
+        kwargs...
+    )
     lb, ub = check_init_bounds(prob)
     lb, ub = check_init_bounds(prob)
     prob = remake(prob; lb = lb, ub = ub)
 
     gbest, particles, solve_time = pso_solve(prob, opt, args...; maxiters, kwargs...)
     particles_positions = get_pos.(particles)
-    SciMLBase.build_solution(SciMLBase.DefaultOptimizationCache(prob.f, prob.p), opt,
+    return SciMLBase.build_solution(
+        SciMLBase.DefaultOptimizationCache(prob.f, prob.p), opt,
         gbest.position, prob.f(gbest.position, prob.p), original = particles_positions,
-        stats = Optimization.OptimizationStats(; time = solve_time))
+        stats = Optimization.OptimizationStats(; time = solve_time)
+    )
 end
 
-function pso_solve(prob::OptimizationProblem,
+function pso_solve(
+        prob::OptimizationProblem,
         opt::ParallelPSOArray,
         args...;
-        kwargs...)
+        kwargs...
+    )
     init_gbest, particles = init_particles(prob, opt, typeof(prob.u0))
     t0 = time()
     gbest,
-    particles = vectorized_solve!(prob,
+        particles = vectorized_solve!(
+        prob,
         init_gbest,
         particles,
         opt,
         args...;
-        kwargs...)
+        kwargs...
+    )
     t1 = time()
-    gbest, particles, t1 - t0
+    return gbest, particles, t1 - t0
 end
 
 function pso_solve(prob::OptimizationProblem, opt::SerialPSO, args...; kwargs...)
@@ -91,5 +112,5 @@ function pso_solve(prob::OptimizationProblem, opt::SerialPSO, args...; kwargs...
     t0 = time()
     gbest, particles = vectorized_solve!(prob, init_gbest, particles, opt; kwargs...)
     t1 = time()
-    gbest, particles, t1 - t0
+    return gbest, particles, t1 - t0
 end

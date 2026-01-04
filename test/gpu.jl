@@ -29,23 +29,27 @@ include("./utils.jl")
 
     @test prob.f(prob.u0, prob.p) > sol.objective
 
-    @test sol.objective < 2e-3
+    @test sol.objective < 2.0e-3
 
     @test sol.retcode == ReturnCode.Default
 
-    sol = solve(prob,
+    sol = solve(
+        prob,
         ParallelPSOKernel(n_particles; backend, global_update = false),
-        maxiters = 1000)
+        maxiters = 1000
+    )
 
     @test prob.f(prob.u0, prob.p) > sol.objective
 
     @test sol.retcode == ReturnCode.Default
 
-    sol = solve(prob,
+    sol = solve(
+        prob,
         ParallelSyncPSOKernel(n_particles; backend),
-        maxiters = 500)
+        maxiters = 500
+    )
 
     @test prob.f(prob.u0, prob.p) > sol.objective
 
-    @test sol.objective < 6e-4
+    @test sol.objective < 6.0e-4
 end

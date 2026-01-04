@@ -17,9 +17,11 @@ function mapstrtoclass(flower)
     end
 end
 ytrain = map(mapstrtoclass, data[:, 5])
-lenet = SimpleChain(static(4),
+lenet = SimpleChain(
+    static(4),
     TurboDense{true}(tanh, 20),
-    TurboDense{true}(identity, 3))
+    TurboDense{true}(identity, 3)
+)
 lenetloss = SimpleChains.add_loss(lenet, LogitCrossEntropyLoss(ytrain))
 
 p = SimpleChains.init_params(lenet);
@@ -53,6 +55,8 @@ prob = OptimizationProblem((u, data) -> lenetloss(data, u), p, xtrain; lb = lb, 
 
 n_particles = 1000
 
-sol = solve(prob,
+sol = solve(
+    prob,
     ParallelPSOKernel(n_particles),
-    maxiters = 1000)
+    maxiters = 1000
+)

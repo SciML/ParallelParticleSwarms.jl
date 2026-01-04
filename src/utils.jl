@@ -1,10 +1,11 @@
 import SciMLBase: @add_kwonly, AbstractNonlinearProblem, AbstractNonlinearFunction,
-                  AbstractODEFunction, AbstractODEProblem, warn_paramtype, ConstructionBase,
-                  NullParameters, StandardNonlinearProblem, @reset, updated_u0_p,
-                  remake_initialization_data, maybe_eager_initialize_problem
+    AbstractODEFunction, AbstractODEProblem, warn_paramtype, ConstructionBase,
+    NullParameters, StandardNonlinearProblem, @reset, updated_u0_p,
+    remake_initialization_data, maybe_eager_initialize_problem
 
 @inbounds function uniform_itr(
-        dim::Int, lb::AbstractArray{T}, ub::AbstractArray{T}) where {T}
+        dim::Int, lb::AbstractArray{T}, ub::AbstractArray{T}
+    ) where {T}
     (rand(T) * (ub[i] - lb[i]) + lb[i] for i in 1:dim)
 end
 
@@ -25,17 +26,22 @@ function _gen_sampling_kernel(prob, num_particles::Int, sampling::QuasiMonteCarl
 end
 
 @kernel function gpu_init_particles!(
-        particles, prob, opt, ::Type{T}, ::Type{GPUUnboundedSampler}) where {T <: SArray}
+        particles, prob, opt, ::Type{T}, ::Type{GPUUnboundedSampler}
+    ) where {T <: SArray}
     i = @index(Global, Linear)
 
     dim = length(prob.u0)
     cost_func = prob.f
     p = prob.p
 
-    position = StaticArrays.sacollect(T,
-        ifelse(abs(prob.u0[i]) > 0,
-            prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i]),
-            rand(eltype(prob.u0))) for i in 1:dim)
+    position = StaticArrays.sacollect(
+        T,
+        ifelse(
+                abs(prob.u0[i]) > 0,
+                prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i]),
+                rand(eltype(prob.u0))
+            ) for i in 1:dim
+    )
 
     velocity = zero(T)
 
@@ -49,11 +55,13 @@ end
     best_position = position
     best_cost = cost
     @inbounds particles[i] = SPSOParticle(
-        position, velocity, cost, best_position, best_cost)
+        position, velocity, cost, best_position, best_cost
+    )
 end
 
 @kernel function gpu_init_particles!(
-        particles, prob, opt, ::Type{T}, ::Type{GPUUniformSampler}) where {T <: SArray}
+        particles, prob, opt, ::Type{T}, ::Type{GPUUniformSampler}
+    ) where {T <: SArray}
     i = @index(Global, Linear)
 
     dim = length(prob.u0)
@@ -76,11 +84,14 @@ end
     best_position = position
     best_cost = cost
     @inbounds particles[i] = SPSOParticle(
-        position, velocity, cost, best_position, best_cost)
+        position, velocity, cost, best_position, best_cost
+    )
 end
 
-@kernel function gpu_init_particles!(particles, qmc_particles, prob, opt, ::Type{T},
-        ::Type{T1}) where {T <: SArray, T1 <: QuasiMonteCarlo.SamplingAlgorithm}
+@kernel function gpu_init_particles!(
+        particles, qmc_particles, prob, opt, ::Type{T},
+        ::Type{T1}
+    ) where {T <: SArray, T1 <: QuasiMonteCarlo.SamplingAlgorithm}
     i = @index(Global, Linear)
 
     dim = length(prob.u0)
@@ -101,7 +112,8 @@ end
     best_cost = cost
 
     @inbounds particles[i] = SPSOParticle(
-        position, velocity, cost, best_position, best_cost)
+        position, velocity, cost, best_position, best_cost
+    )
 end
 
 function init_particles!(particles, prob, opt, ::Type{T}) where {T <: SArray}
@@ -113,10 +125,13 @@ function init_particles!(particles, prob, opt, ::Type{T}) where {T <: SArray}
     num_particles = opt.num_particles
 
     if lb === nothing || (all(isinf, lb) && all(isinf, ub))
-        gbest_position = StaticArrays.sacollect(T,
+        gbest_position = StaticArrays.sacollect(
+            T,
             ifelse(
-                abs(prob.u0[i]) > 0, prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i]),
-                rand(eltype(prob.u0))) for i in 1:dim)
+                    abs(prob.u0[i]) > 0, prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i]),
+                    rand(eltype(prob.u0))
+                ) for i in 1:dim
+        )
     else
         gbest_position = StaticArrays.sacollect(T, uniform_itr(dim, lb, ub))
     end
@@ -138,10 +153,14 @@ function init_particles!(particles, prob, opt, ::Type{T}) where {T <: SArray}
 
     for i in 1:num_particles
         if lb === nothing || (all(isinf, lb) && all(isinf, ub))
-            position = StaticArrays.sacollect(T,
-                ifelse(abs(prob.u0[i]) > 0,
-                    prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i]),
-                    rand(eltype(prob.u0))) for i in 1:dim)
+            position = StaticArrays.sacollect(
+                T,
+                ifelse(
+                        abs(prob.u0[i]) > 0,
+                        prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i]),
+                        rand(eltype(prob.u0))
+                    ) for i in 1:dim
+            )
         else
             @inbounds position = StaticArrays.sacollect(T, positions[j, i] for j in 1:dim)
         end
@@ -158,7 +177,8 @@ function init_particles!(particles, prob, opt, ::Type{T}) where {T <: SArray}
         best_position = position
         best_cost = cost
         @inbounds particles[i] = SPSOParticle(
-            position, velocity, cost, best_position, best_cost)
+            position, velocity, cost, best_position, best_cost
+        )
 
         if best_cost < gbest_cost
             gbest_position = best_position
@@ -180,10 +200,13 @@ function init_particles(prob, opt, ::Type{T}) where {T <: SArray}
     unbounded = lb === nothing || (all(isinf, lb) && all(isinf, ub))
 
     if unbounded
-        gbest_position = StaticArrays.sacollect(T,
+        gbest_position = StaticArrays.sacollect(
+            T,
             ifelse(
-                abs(prob.u0[i]) > 0, prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i]),
-                rand(eltype(prob.u0))) for i in 1:dim)
+                    abs(prob.u0[i]) > 0, prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i]),
+                    rand(eltype(prob.u0))
+                ) for i in 1:dim
+        )
     else
         gbest_position = StaticArrays.sacollect(T, uniform_itr(dim, lb, ub))
     end
@@ -201,10 +224,14 @@ function init_particles(prob, opt, ::Type{T}) where {T <: SArray}
 
     for i in 1:num_particles
         if unbounded
-            @inbounds position = StaticArrays.sacollect(T,
-                ifelse(abs(prob.u0[j]) > 0,
-                    prob.u0[j] + rand(eltype(prob.u0)) * abs(prob.u0[j]),
-                    rand(eltype(prob.u0))) for j in 1:dim)
+            @inbounds position = StaticArrays.sacollect(
+                T,
+                ifelse(
+                        abs(prob.u0[j]) > 0,
+                        prob.u0[j] + rand(eltype(prob.u0)) * abs(prob.u0[j]),
+                        rand(eltype(prob.u0))
+                    ) for j in 1:dim
+            )
         else
             @inbounds position = StaticArrays.sacollect(T, positions[j, i] for j in 1:dim)
         end
@@ -292,7 +319,7 @@ function check_init_bounds(prob)
         lb = SVector{length(lb), eltype(lb)}(lb)
         ub = SVector{length(ub), eltype(ub)}(ub)
     end
-    lb, ub
+    return lb, ub
 end
 
 @inline function θ_default(x::T) where {T <: Number}
@@ -328,9 +355,11 @@ Based on the paper: Particle swarm optimization method for constrained optimizat
   year={2002}
 }
 """
-@inline function calc_penalty(u,
+@inline function calc_penalty(
+        u,
         prob::OptimizationProblem,
-        iter, θ, γ, h)
+        iter, θ, γ, h
+    )
     T = eltype(u)
     cons_ret = prob.f.cons(u, prob.p)
     q = max.(cons_ret, T(0))
@@ -344,15 +373,15 @@ Based on the paper: Particle swarm optimization method for constrained optimizat
         penalty += thetaq[i] * pen_pow
     end
     penalty = h(T(iter)) * penalty
-    penalty
+    return penalty
 end
 
 #TODO: Possible migration to DifferentiationInterface.jl,
 # however I cannot compile GPU-compatible gradients with Enzyme as Mar 2025
 @inline function instantiate_gradient(f, adtype::AutoForwardDiff)
-    (θ, p) -> ForwardDiff.gradient(x -> f(x, p), θ)
+    return (θ, p) -> ForwardDiff.gradient(x -> f(x, p), θ)
 end
 
 @inline function instantiate_gradient(f, adtype::AutoEnzyme)
-    (θ, p) -> autodiff_deferred(Reverse, Const(x -> f(x, p)), Active, Active(θ))[1][1]
+    return (θ, p) -> autodiff_deferred(Reverse, Const(x -> f(x, p)), Active, Active(θ))[1][1]
 end

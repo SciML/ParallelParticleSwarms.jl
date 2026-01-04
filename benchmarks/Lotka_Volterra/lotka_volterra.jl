@@ -33,16 +33,16 @@ tinterval_short = 0:h:tstop
 t_short = collect(tinterval_short)
 
 #Generate Data
-data_sol_short = solve(prob_short, Tsit5(), saveat = t_short, reltol = 1e-9, abstol = 1e-9)
+data_sol_short = solve(prob_short, Tsit5(), saveat = t_short, reltol = 1.0e-9, abstol = 1.0e-9)
 data_short = convert(Array, data_sol_short)
-data_sol = solve(prob, Tsit5(), saveat = t, reltol = 1e-9, abstol = 1e-9)
+data_sol = solve(prob, Tsit5(), saveat = t, reltol = 1.0e-9, abstol = 1.0e-9)
 data = convert(Array, data_sol)
 
 function loss(u, p)
     odeprob, t = p
     prob = remake(odeprob; p = u)
     pred = Array(solve(prob, Tsit5(), saveat = t))
-    sum(abs2, data_short .- pred)
+    return sum(abs2, data_short .- pred)
 end
 
 lb = @SArray fill(0.0, 4)
@@ -54,10 +54,13 @@ optprob = OptimizationProblem(loss, opt_u0, (prob_short, t_short); lb = lb, ub =
 u_guess = @MArray zeros(Float64, 4)
 
 optprob = OptimizationProblem(
-    Optimization.OptimizationFunction(loss,
-        Optimization.AutoForwardDiff()),
+    Optimization.OptimizationFunction(
+        loss,
+        Optimization.AutoForwardDiff()
+    ),
     u_guess,
-    (prob_short, t_short))
+    (prob_short, t_short)
+)
 
 # optf = Optimization.OptimizationFunction((x, p) -> loss_neuralode(x),
 #     Optimization.AutoZygote())
@@ -102,9 +105,13 @@ using Adapt
 
 backend = CUDABackend()
 
-gpu_data = adapt(backend,
-    [SVector{length(prob.u0), eltype(prob.u0)}(@view data_short[:, i])
-     for i in 1:length(t_short)])
+gpu_data = adapt(
+    backend,
+    [
+        SVector{length(prob.u0), eltype(prob.u0)}(@view data_short[:, i])
+            for i in 1:length(t_short)
+    ]
+)
 
 gpu_particles = adapt(backend, particles)
 
@@ -114,14 +121,18 @@ solver_cache = (; losses, gpu_particles, gpu_data, gbest)
 
 adaptive = false
 
-@time gsol = ParallelParticleSwarms.parameter_estim_ode!(prob, solver_cache,
+@time gsol = ParallelParticleSwarms.parameter_estim_ode!(
+    prob, solver_cache,
     lb,
-    ub, Val(adaptive); saveat = t_short, dt = 0.1, maxiters = 100)
+    ub, Val(adaptive); saveat = t_short, dt = 0.1, maxiters = 100
+)
 
 using BenchmarkTools
 
-@benchmark ParallelParticleSwarms.parameter_estim_ode!($prob, $(deepcopy(solver_cache)),
+@benchmark ParallelParticleSwarms.parameter_estim_ode!(
+    $prob, $(deepcopy(solver_cache)),
     $lb,
-    $ub, Val(adaptive); saveat = t_short, dt = 0.1, maxiters = 100)
+    $ub, Val(adaptive); saveat = t_short, dt = 0.1, maxiters = 100
+)
 
 @show gsol
