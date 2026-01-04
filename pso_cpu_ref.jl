@@ -32,14 +32,16 @@ mutable struct Gbest
     cost::Float64
 end
 
-function PSO(problem,
+function PSO(
+        problem,
         data_dict;
         max_iter = 100,
         population = 100,
         c1 = 1.4962,
         c2 = 1.4962,
         w = 0.7298,
-        wdamp = 1.0)
+        wdamp = 1.0
+    )
     dim = problem.dim
     lb = problem.lb
     ub = problem.ub
@@ -51,10 +53,12 @@ function PSO(problem,
     for iter in 1:max_iter
         @threads for i in 1:population
             particles[i].velocity .= w .* particles[i].velocity .+
-                                     c1 .* rand(dim) .* (particles[i].best_position .-
-                                      particles[i].position) .+
-                                     c2 .* rand(dim) .*
-                                     (gbest.position .- particles[i].position)
+                c1 .* rand(dim) .* (
+                particles[i].best_position .-
+                    particles[i].position
+            ) .+
+                c2 .* rand(dim) .*
+                (gbest.position .- particles[i].position)
 
             particles[i].position .= particles[i].position .+ particles[i].velocity
             particles[i].position .= max.(particles[i].position, lb)
@@ -79,17 +83,19 @@ function PSO(problem,
             println()
         end
     end
-    gbest, particles
+    return gbest, particles
 end
 
-function serial_PSO(problem,
+function serial_PSO(
+        problem,
         data_dict;
         max_iter = 100,
         population = 100,
         c1 = 1.4962,
         c2 = 1.4962,
         w = 0.7298,
-        wdamp = 1.0)
+        wdamp = 1.0
+    )
     dim = problem.dim
     lb = problem.lb
     ub = problem.ub
@@ -101,10 +107,12 @@ function serial_PSO(problem,
     for iter in 1:max_iter
         for i in 1:population
             particles[i].velocity .= w .* particles[i].velocity .+
-                                     c1 .* rand(dim) .* (particles[i].best_position .-
-                                      particles[i].position) .+
-                                     c2 .* rand(dim) .*
-                                     (gbest.position .- particles[i].position)
+                c1 .* rand(dim) .* (
+                particles[i].best_position .-
+                    particles[i].position
+            ) .+
+                c2 .* rand(dim) .*
+                (gbest.position .- particles[i].position)
 
             particles[i].position .= particles[i].position .+ particles[i].velocity
             particles[i].position .= max.(particles[i].position, lb)
@@ -129,7 +137,7 @@ function serial_PSO(problem,
             println()
         end
     end
-    gbest, particles
+    return gbest, particles
 end
 
 function initialize_particles(problem, population, data_dict)

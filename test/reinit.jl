@@ -1,5 +1,5 @@
 using ParallelParticleSwarms, StaticArrays, SciMLBase, Test, LinearAlgebra, Random,
-      KernelAbstractions
+    KernelAbstractions
 using QuasiMonteCarlo
 
 ## Solving the rosenbrock problem
@@ -12,7 +12,7 @@ function rosenbrock(x, p)
     for i in 1:(length(x) - 1)
         res += p[2] * (x[i + 1] - x[i]^2)^2 + (p[1] - x[i])^2
     end
-    res
+    return res
 end
 x0 = @SArray zeros(Float32, 3)
 p = @SArray Float32[1.0, 100.0]
@@ -29,14 +29,20 @@ cache = init(prob, ParallelSyncPSOKernel(n_particles; backend = CPU()))
 
 reinit!(cache)
 
-cache = init(prob,
+cache = init(
+    prob,
     ParallelParticleSwarms.HybridPSO(;
-        local_opt = ParallelParticleSwarms.BFGS(), backend = CPU()))
+        local_opt = ParallelParticleSwarms.BFGS(), backend = CPU()
+    )
+)
 
 reinit!(cache)
 
-cache = init(prob,
+cache = init(
+    prob,
     ParallelParticleSwarms.HybridPSO(;
-        local_opt = ParallelParticleSwarms.LBFGS(), backend = CPU()))
+        local_opt = ParallelParticleSwarms.LBFGS(), backend = CPU()
+    )
+)
 
 reinit!(cache)

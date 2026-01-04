@@ -39,27 +39,35 @@ mutable struct MPSOGBest{T}
 end
 
 ## required overloads for min or max computation on particles
-function Base.isless(a::ParallelParticleSwarms.SPSOParticle{T1, T2},
-        b::ParallelParticleSwarms.SPSOParticle{T1, T2}) where {T1, T2}
-    a.best_cost < b.best_cost
+function Base.isless(
+        a::ParallelParticleSwarms.SPSOParticle{T1, T2},
+        b::ParallelParticleSwarms.SPSOParticle{T1, T2}
+    ) where {T1, T2}
+    return a.best_cost < b.best_cost
 end
 
-function Base.isless(a::ParallelParticleSwarms.SPSOGBest{T1, T2},
-        b::ParallelParticleSwarms.SPSOGBest{T1, T2}) where {T1, T2}
-    a.cost < b.cost
+function Base.isless(
+        a::ParallelParticleSwarms.SPSOGBest{T1, T2},
+        b::ParallelParticleSwarms.SPSOGBest{T1, T2}
+    ) where {T1, T2}
+    return a.cost < b.cost
 end
 
 function Base.typemax(::Type{ParallelParticleSwarms.SPSOParticle{T1, T2}}) where {T1, T2}
-    ParallelParticleSwarms.SPSOParticle{T1, T2}(similar(T1),
+    return ParallelParticleSwarms.SPSOParticle{T1, T2}(
+        similar(T1),
         similar(T1),
         typemax(T2),
         similar(T1),
-        typemax(T2))
+        typemax(T2)
+    )
 end
 
 function Base.typemax(::Type{ParallelParticleSwarms.SPSOGBest{T1, T2}}) where {T1, T2}
-    ParallelParticleSwarms.SPSOGBest{T1, T2}(similar(T1),
-        typemax(T2))
+    return ParallelParticleSwarms.SPSOGBest{T1, T2}(
+        similar(T1),
+        typemax(T2)
+    )
 end
 
 include("./algorithms.jl")
@@ -74,5 +82,5 @@ include("./hybrid.jl")
 include("./precompilation.jl")
 
 export ParallelPSOKernel,
-       ParallelSyncPSOKernel, ParallelPSOArray, SerialPSO
+    ParallelSyncPSOKernel, ParallelPSOArray, SerialPSO
 end

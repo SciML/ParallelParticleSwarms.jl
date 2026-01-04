@@ -1,5 +1,5 @@
 using ParallelParticleSwarms, StaticArrays, SciMLBase, Test, LinearAlgebra, Random,
-      KernelAbstractions
+    KernelAbstractions
 using QuasiMonteCarlo
 
 @testset "Rosenbrock test dimension = $(N)" for N in 2:3
@@ -20,53 +20,69 @@ using QuasiMonteCarlo
     x0 = @SArray zeros(Float32, N)
     p = @SArray Float32[1.0, 100.0]
 
-    array_prob = OptimizationProblem(rosenbrock,
+    array_prob = OptimizationProblem(
+        rosenbrock,
         zeros(Float32, N),
         Float32[1.0, 100.0];
         lb = lb,
-        ub = ub)
+        ub = ub
+    )
 
     prob = OptimizationProblem(rosenbrock, x0, p; lb = lb, ub = ub)
 
     n_particles = 2000
 
-    sol = solve(array_prob,
+    sol = solve(
+        array_prob,
         ParallelPSOArray(n_particles),
-        maxiters = 500)
+        maxiters = 500
+    )
 
-    @test sol.objective < 3e-4
+    @test sol.objective < 3.0e-4
 
-    sol = solve(prob,
+    sol = solve(
+        prob,
         SerialPSO(n_particles),
-        maxiters = 600)
+        maxiters = 600
+    )
 
-    @test sol.objective < 1e-4
+    @test sol.objective < 1.0e-4
 
     sol = solve!(
-        init(prob, ParallelPSOKernel(n_particles; backend = CPU());
-            sampler = LatinHypercubeSample()),
-        maxiters = 500)
+        init(
+            prob, ParallelPSOKernel(n_particles; backend = CPU());
+            sampler = LatinHypercubeSample()
+        ),
+        maxiters = 500
+    )
 
     @test sol.retcode == ReturnCode.Default
 
-    sol = solve(prob,
+    sol = solve(
+        prob,
         ParallelPSOKernel(n_particles; backend = CPU()),
-        maxiters = 500)
+        maxiters = 500
+    )
 
-    @test sol.objective < 1e-4
+    @test sol.objective < 1.0e-4
 
     sol = solve!(
-        init(prob, ParallelSyncPSOKernel(n_particles; backend = CPU());
-            sampler = LatinHypercubeSample()),
-        maxiters = 500)
+        init(
+            prob, ParallelSyncPSOKernel(n_particles; backend = CPU());
+            sampler = LatinHypercubeSample()
+        ),
+        maxiters = 500
+    )
 
     @test sol.retcode == ReturnCode.Default
 
-    sol = solve(prob,
+    sol = solve(
+        prob,
         ParallelSyncPSOKernel(n_particles; backend = CPU()),
-        maxiters = 500)
+        maxiters = 500
+    )
 
-    @test sol.objective < 3e-3
+    @test sol.objective < 3.0e-3
 
     lb = @SVector fill(Float32(-Inf), N)
     ub = @SVector fill(Float32(Inf), N)
@@ -74,82 +90,110 @@ using QuasiMonteCarlo
     array_prob = remake(array_prob; lb = lb, ub = ub)
     prob = remake(prob; lb = lb, ub = ub)
 
-    sol = solve(array_prob,
+    sol = solve(
+        array_prob,
         ParallelPSOArray(n_particles),
-        maxiters = 500)
+        maxiters = 500
+    )
 
-    @test sol.objective < 1e-4
+    @test sol.objective < 1.0e-4
 
-    sol = solve(prob,
+    sol = solve(
+        prob,
         SerialPSO(n_particles),
-        maxiters = 500)
+        maxiters = 500
+    )
 
-    @test sol.objective < 1e-4
+    @test sol.objective < 1.0e-4
 
     sol = solve!(
-        init(prob, ParallelPSOKernel(n_particles; backend = CPU());
-            sampler = LatinHypercubeSample()),
-        maxiters = 500)
+        init(
+            prob, ParallelPSOKernel(n_particles; backend = CPU());
+            sampler = LatinHypercubeSample()
+        ),
+        maxiters = 500
+    )
 
     @test sol.retcode == ReturnCode.Default
 
-    sol = solve(prob,
+    sol = solve(
+        prob,
         ParallelPSOKernel(n_particles; backend = CPU()),
-        maxiters = 500)
+        maxiters = 500
+    )
 
-    @test sol.objective < 1e-4
+    @test sol.objective < 1.0e-4
 
     sol = solve!(
-        init(prob, ParallelSyncPSOKernel(n_particles; backend = CPU());
-            sampler = LatinHypercubeSample()),
-        maxiters = 500)
+        init(
+            prob, ParallelSyncPSOKernel(n_particles; backend = CPU());
+            sampler = LatinHypercubeSample()
+        ),
+        maxiters = 500
+    )
 
     @test sol.retcode == ReturnCode.Default
 
-    sol = solve(prob,
+    sol = solve(
+        prob,
         ParallelSyncPSOKernel(n_particles; backend = CPU()),
-        maxiters = 500)
+        maxiters = 500
+    )
 
-    @test sol.objective < 2e-4
+    @test sol.objective < 2.0e-4
 
     array_prob = remake(array_prob; lb = nothing, ub = nothing)
     prob = remake(prob; lb = nothing, ub = nothing)
 
-    sol = solve(array_prob,
+    sol = solve(
+        array_prob,
         ParallelPSOArray(n_particles),
-        maxiters = 500)
+        maxiters = 500
+    )
 
-    @test sol.objective < 1e-4
+    @test sol.objective < 1.0e-4
 
-    sol = solve(prob,
+    sol = solve(
+        prob,
         SerialPSO(n_particles),
-        maxiters = 500)
+        maxiters = 500
+    )
 
-    @test sol.objective < 1e-4
+    @test sol.objective < 1.0e-4
 
     sol = solve!(
-        init(prob, ParallelPSOKernel(n_particles; backend = CPU());
-            sampler = LatinHypercubeSample()),
-        maxiters = 500)
+        init(
+            prob, ParallelPSOKernel(n_particles; backend = CPU());
+            sampler = LatinHypercubeSample()
+        ),
+        maxiters = 500
+    )
 
     @test sol.retcode == ReturnCode.Default
 
-    sol = solve(prob,
+    sol = solve(
+        prob,
         ParallelPSOKernel(n_particles; backend = CPU()),
-        maxiters = 500)
+        maxiters = 500
+    )
 
-    @test sol.objective < 1e-4
+    @test sol.objective < 1.0e-4
 
     sol = solve!(
-        init(prob, ParallelSyncPSOKernel(n_particles; backend = CPU());
-            sampler = LatinHypercubeSample()),
-        maxiters = 500)
+        init(
+            prob, ParallelSyncPSOKernel(n_particles; backend = CPU());
+            sampler = LatinHypercubeSample()
+        ),
+        maxiters = 500
+    )
 
-    sol = solve(prob,
+    sol = solve(
+        prob,
         ParallelSyncPSOKernel(n_particles; backend = CPU()),
-        maxiters = 500)
+        maxiters = 500
+    )
 
-    @test sol.objective < 2e-2
+    @test sol.objective < 2.0e-2
 end
 
 ## Separate tests for N = 4 as the problem becomes non-convex and requires more iterations to converge
@@ -172,47 +216,61 @@ end
     x0 = @SArray zeros(Float32, N)
     p = @SArray Float32[1.0, 100.0]
 
-    array_prob = OptimizationProblem(rosenbrock,
+    array_prob = OptimizationProblem(
+        rosenbrock,
         zeros(Float32, N),
         Float32[1.0, 100.0];
         lb = lb,
-        ub = ub)
+        ub = ub
+    )
 
     prob = OptimizationProblem(rosenbrock, x0, p; lb = lb, ub = ub)
 
     n_particles = 2000
 
-    sol = solve(prob,
+    sol = solve(
+        prob,
         SerialPSO(n_particles),
-        maxiters = 1000)
+        maxiters = 1000
+    )
 
-    @test sol.objective < 2e-3
+    @test sol.objective < 2.0e-3
 
     sol = solve!(
-        init(prob, ParallelPSOKernel(n_particles; backend = CPU());
-            sampler = LatinHypercubeSample()),
-        maxiters = 2000)
+        init(
+            prob, ParallelPSOKernel(n_particles; backend = CPU());
+            sampler = LatinHypercubeSample()
+        ),
+        maxiters = 2000
+    )
 
     @test sol.retcode == ReturnCode.Default
 
-    sol = solve(prob,
+    sol = solve(
+        prob,
         ParallelPSOKernel(n_particles; backend = CPU()),
-        maxiters = 2000)
+        maxiters = 2000
+    )
 
-    @test sol.objective < 2e-2
+    @test sol.objective < 2.0e-2
 
     sol = solve!(
-        init(prob, ParallelSyncPSOKernel(n_particles; backend = CPU());
-            sampler = LatinHypercubeSample()),
-        maxiters = 2000)
+        init(
+            prob, ParallelSyncPSOKernel(n_particles; backend = CPU());
+            sampler = LatinHypercubeSample()
+        ),
+        maxiters = 2000
+    )
 
     @test sol.retcode == ReturnCode.Default
 
-    sol = solve(prob,
+    sol = solve(
+        prob,
         ParallelSyncPSOKernel(n_particles; backend = CPU()),
-        maxiters = 2000)
+        maxiters = 2000
+    )
 
-    @test sol.objective < 3e-2
+    @test sol.objective < 3.0e-2
 
     lb = @SVector fill(Float32(-Inf), N)
     ub = @SVector fill(Float32(Inf), N)
@@ -220,44 +278,58 @@ end
     array_prob = remake(array_prob; lb = lb, ub = ub)
     prob = remake(prob; lb = lb, ub = ub)
 
-    sol = solve(prob,
+    sol = solve(
+        prob,
         SerialPSO(n_particles),
-        maxiters = 1000)
+        maxiters = 1000
+    )
 
-    @test sol.objective < 2e-3
+    @test sol.objective < 2.0e-3
 
     array_prob = remake(array_prob; lb = nothing, ub = nothing)
     prob = remake(prob; lb = nothing, ub = nothing)
 
-    sol = solve(prob,
+    sol = solve(
+        prob,
         SerialPSO(n_particles),
-        maxiters = 1000)
+        maxiters = 1000
+    )
 
-    @test sol.objective < 2e-3
+    @test sol.objective < 2.0e-3
 
     sol = solve!(
-        init(prob, ParallelPSOKernel(n_particles; backend = CPU());
-            sampler = LatinHypercubeSample()),
-        maxiters = 1000)
+        init(
+            prob, ParallelPSOKernel(n_particles; backend = CPU());
+            sampler = LatinHypercubeSample()
+        ),
+        maxiters = 1000
+    )
 
     @test sol.retcode == ReturnCode.Default
 
-    sol = solve(prob,
+    sol = solve(
+        prob,
         ParallelPSOKernel(n_particles; backend = CPU()),
-        maxiters = 1000)
+        maxiters = 1000
+    )
 
-    @test sol.objective < 2e-3
+    @test sol.objective < 2.0e-3
 
     sol = solve!(
-        init(prob, ParallelSyncPSOKernel(n_particles; backend = CPU());
-            sampler = LatinHypercubeSample()),
-        maxiters = 2000)
+        init(
+            prob, ParallelSyncPSOKernel(n_particles; backend = CPU());
+            sampler = LatinHypercubeSample()
+        ),
+        maxiters = 2000
+    )
 
     @test sol.retcode == ReturnCode.Default
 
-    sol = solve(prob,
+    sol = solve(
+        prob,
         ParallelSyncPSOKernel(n_particles; backend = CPU()),
-        maxiters = 2000)
+        maxiters = 2000
+    )
 
-    @test sol.objective < 4e-1
+    @test sol.objective < 4.0e-1
 end

@@ -3,7 +3,7 @@ using Pkg
 Pkg.activate(@__DIR__)
 
 using SimpleChains,
-      StaticArrays, OrdinaryDiffEq, SciMLSensitivity, Optimization, OptimizationFlux, Plots
+    StaticArrays, OrdinaryDiffEq, SciMLSensitivity, Optimization, OptimizationFlux, Plots
 
 using CUDA
 device!(2)
@@ -15,16 +15,18 @@ tsteps = range(tspan[1], tspan[2], length = datasize)
 
 function trueODE(u, p, t)
     true_A = @SMatrix Float32[-0.1 2.0; -2.0 -0.1]
-    ((u .^ 3)'true_A)'
+    return ((u .^ 3)'true_A)'
 end
 
 prob = ODEProblem(trueODE, u0, tspan)
 data = Array(solve(prob, Tsit5(), saveat = tsteps))
 
-sc = SimpleChain(static(2),
+sc = SimpleChain(
+    static(2),
     Activation(x -> x .^ 3),
     TurboDense{true}(tanh, static(2)),
-    TurboDense{true}(identity, static(2)))
+    TurboDense{true}(identity, static(2))
+)
 
 using Random
 rng = Random.default_rng()
@@ -37,11 +39,15 @@ f(u, p, t) = sc(u, p)
 sprob_nn = ODEProblem(f, u0, tspan)
 
 function predict_neuralode(p)
-    Array(solve(sprob_nn,
-        Tsit5();
-        p = p,
-        saveat = tsteps,
-        sensealg = QuadratureAdjoint(autojacvec = ZygoteVJP())))
+    return Array(
+        solve(
+            sprob_nn,
+            Tsit5();
+            p = p,
+            saveat = tsteps,
+            sensealg = QuadratureAdjoint(autojacvec = ZygoteVJP())
+        )
+    )
 end
 
 function loss_neuralode(p)
@@ -60,8 +66,10 @@ callback = function (p, l, pred; doplot = true)
     return false
 end
 
-optf = Optimization.OptimizationFunction((x, p) -> loss_neuralode(x),
-    Optimization.AutoZygote())
+optf = Optimization.OptimizationFunction(
+    (x, p) -> loss_neuralode(x),
+    Optimization.AutoZygote()
+)
 optprob = Optimization.OptimizationProblem(optf, p_nn)
 
 @time res_adam = Optimization.solve(optprob, ADAM(0.05), maxiters = 100)
@@ -101,7 +109,7 @@ function loss(u, p)
     odeprob, t = p
     prob = remake(odeprob; p = (odeprob.p[1], u))
     pred = Array(solve(prob, Tsit5(), saveat = t))
-    sum(abs2, data .- pred)
+    return sum(abs2, data .- pred)
 end
 
 # lb = SVector{length(p_static), eltype(p_static)}(fill(eltype(p_static)(-10),
@@ -128,9 +136,13 @@ Random.seed!(rng, 0)
 opt = ParallelPSOKernel(n_particles)
 gbest, particles = ParallelParticleSwarms.init_particles(soptprob, opt, typeof(prob.u0))
 
-gpu_data = adapt(backend,
-    [SVector{length(prob_nn.u0), eltype(prob_nn.u0)}(@view data[:, i])
-     for i in 1:length(tsteps)])
+gpu_data = adapt(
+    backend,
+    [
+        SVector{length(prob_nn.u0), eltype(prob_nn.u0)}(@view data[:, i])
+            for i in 1:length(tsteps)
+    ]
+)
 
 CUDA.allowscalar(false)
 
@@ -146,39 +158,45 @@ solver_cache = (; losses, gpu_particles, gpu_data, gbest)
 
 adaptive = true
 
-@time gsol = ParallelParticleSwarms.parameter_estim_ode!(prob_nn,
+@time gsol = ParallelParticleSwarms.parameter_estim_ode!(
+    prob_nn,
     solver_cache,
     lb,
     ub, Val(adaptive);
     saveat = tsteps,
     dt = 0.1f0,
     prob_func = prob_func,
-    maxiters = 100)
+    maxiters = 100
+)
 
-@benchmark ParallelParticleSwarms.parameter_estim_ode!($prob_nn,
+@benchmark ParallelParticleSwarms.parameter_estim_ode!(
+    $prob_nn,
     $(deepcopy(solver_cache)),
     $lb,
     $ub, Val(adaptive);
     saveat = tsteps,
     dt = 0.1f0,
     prob_func = prob_func,
-    maxiters = 100)
+    maxiters = 100
+)
 
 @show gsol.cost
 
 using Plots
 
 function predict_neuralode(p)
-    Array(solve(prob_nn, Tsit5(); p = p, saveat = tsteps))
+    return Array(solve(prob_nn, Tsit5(); p = p, saveat = tsteps))
 end
 
-plt = scatter(tsteps,
+plt = scatter(
+    tsteps,
     data[1, :],
     label = "data",
     ylabel = "u(t)",
     xlabel = "t",
     linewidth = 4,
-    title = "Optimizers performance after 100 iterations")
+    title = "Optimizers performance after 100 iterations"
+)
 
 pred_pso = predict_neuralode((sc, gsol.position))
 scatter!(plt, tsteps, pred_pso[1, :], label = "PSO prediction", markershape = :star5)

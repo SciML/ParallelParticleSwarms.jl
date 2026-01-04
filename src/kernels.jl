@@ -1,10 +1,12 @@
 @inline function update_particle_state(particle, prob, gbest, w, c1, c2, iter, opt)
     updated_velocity = w .* particle.velocity .+
-                       c1 .* rand(typeof(particle.velocity)) .*
-                       (particle.best_position -
-                        particle.position) .+
-                       c2 .* rand(typeof(particle.velocity)) .*
-                       (gbest.position - particle.position)
+        c1 .* rand(typeof(particle.velocity)) .*
+        (
+        particle.best_position -
+            particle.position
+    ) .+
+        c2 .* rand(typeof(particle.velocity)) .*
+        (gbest.position - particle.position)
 
     @set! particle.velocity = updated_velocity
 
@@ -20,7 +22,7 @@
         @set! particle.best_position = particle.position
         @set! particle.best_cost = particle.cost
     end
-    particle
+    return particle
 end
 
 @inline function handle_constraints(particle, prob, iter, opt)
@@ -30,13 +32,15 @@ end
     else
         @set! particle.cost = prob.f(particle.position, prob.p)
     end
-    particle
+    return particle
 end
 
-@kernel function update_particle_states!(prob,
+@kernel function update_particle_states!(
+        prob,
         gpu_particles::AbstractArray{SPSOParticle{T1, T2}}, gbest_ref, w,
         opt::ParallelPSOKernel, lock; c1 = 1.4962f0,
-        c2 = 1.4962f0) where {T1, T2}
+        c2 = 1.4962f0
+    ) where {T1, T2}
     i = @index(Global, Linear)
     tidx = @index(Local, Linear)
 
@@ -50,28 +54,34 @@ end
     @inbounds particle[1] = gpu_particles[i]
     # Initialize cost to be Inf
     if tidx == 1
-        fill!(best_queue,
-            SPSOGBest(particle[1].position, convert(typeof(particle[1].cost), Inf)))
+        fill!(
+            best_queue,
+            SPSOGBest(particle[1].position, convert(typeof(particle[1].cost), Inf))
+        )
         queue_num[1] = UInt32(0)
     end
 
     @synchronize
 
-    @inbounds particle[1] = update_particle_state(particle[1],
+    @inbounds particle[1] = update_particle_state(
+        particle[1],
         prob,
         gbest_ref[1],
         w,
         c1,
         c2,
         i,
-        opt)
+        opt
+    )
 
     @synchronize
 
     @inbounds if particle[1].best_cost < gbest_ref[1].cost
         queue_idx = @atomic queue_num[1] += UInt32(1)
-        @inbounds best_queue[queue_idx] = SPSOGBest(particle[1].best_position,
-            particle[1].best_cost)
+        @inbounds best_queue[queue_idx] = SPSOGBest(
+            particle[1].best_position,
+            particle[1].best_cost
+        )
     end
 
     @synchronize
@@ -87,7 +97,7 @@ end
 
             # Take lock
             while true
-                res = @atomicreplace lock[1] UInt32(0)=>UInt32(1)
+                res = @atomicreplace lock[1] UInt32(0) => UInt32(1)
                 if res.success
                     break
                 end
@@ -105,10 +115,12 @@ end
     @inbounds gpu_particles[i] = particle[1]
 end
 
-@kernel function update_particle_states!(prob,
+@kernel function update_particle_states!(
+        prob,
         gpu_particles::AbstractArray{SPSOParticle{T1, T2}}, block_particles, gbest, w,
         opt::ParallelSyncPSOKernel; c1 = 1.4962f0,
-        c2 = 1.4962f0) where {T1, T2}
+        c2 = 1.4962f0
+    ) where {T1, T2}
     i = @index(Global, Linear)
     tidx = @index(Local, Linear)
     gidx = @index(Group, Linear)
@@ -153,9 +165,11 @@ end
 # Why you say we need a different code for CPUs for sync version? Turns out
 # that you cannot do reduction within a kernel due to some bugs in KA.jl
 # https://github.com/JuliaGPU/KernelAbstractions.jl/issues/330
-@kernel function update_particle_states!(prob, gpu_particles, gbest, w,
+@kernel function update_particle_states!(
+        prob, gpu_particles, gbest, w,
         opt::ParallelSyncPSOKernel{Backend, T, G, H}; c1 = 1.4962f0,
-        c2 = 1.4962f0) where {Backend <: CPU, T, G, H}
+        c2 = 1.4962f0
+    ) where {Backend <: CPU, T, G, H}
     i = @index(Global, Linear)
 
     @inbounds particle = gpu_particles[i]
@@ -165,12 +179,14 @@ end
     @inbounds gpu_particles[i] = particle
 end
 
-@kernel function update_particle_states_async!(prob,
+@kernel function update_particle_states_async!(
+        prob,
         gpu_particles,
         gbest_ref,
         w, wdamp, maxiters, opt;
         c1 = 1.4962f0,
-        c2 = 1.4962f0)
+        c2 = 1.4962f0
+    )
     i = @index(Global, Linear)
 
     gbest = gbest_ref[1]

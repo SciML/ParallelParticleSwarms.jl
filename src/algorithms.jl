@@ -1,4 +1,3 @@
-
 abstract type PSOAlgorithm end
 abstract type HybridPSOAlgorithm{LocalOpt} end
 abstract type GPUSamplingAlgorithm end
@@ -115,22 +114,26 @@ struct SerialPSO{T, G, H} <: PSOAlgorithm
     h::H
 end
 
-function ParallelPSOKernel(num_particles::Int;
-        global_update = true, backend = CPU(), θ = θ_default, γ = γ_default, h = sqrt)
-    ParallelPSOKernel(num_particles, global_update, backend, θ, γ, h)
+function ParallelPSOKernel(
+        num_particles::Int;
+        global_update = true, backend = CPU(), θ = θ_default, γ = γ_default, h = sqrt
+    )
+    return ParallelPSOKernel(num_particles, global_update, backend, θ, γ, h)
 end
 
-function ParallelSyncPSOKernel(num_particles::Int;
-        backend = CPU(), θ = θ_default, γ = γ_default, h = sqrt)
-    ParallelSyncPSOKernel(num_particles, backend, θ, γ, h)
+function ParallelSyncPSOKernel(
+        num_particles::Int;
+        backend = CPU(), θ = θ_default, γ = γ_default, h = sqrt
+    )
+    return ParallelSyncPSOKernel(num_particles, backend, θ, γ, h)
 end
 
 function ParallelPSOArray(num_particles::Int; θ = θ_default, γ = γ_default, h = sqrt)
-    ParallelPSOArray(num_particles, θ, γ, h)
+    return ParallelPSOArray(num_particles, θ, γ, h)
 end
 
 function SerialPSO(num_particles::Int; θ = θ_default, γ = γ_default, h = sqrt)
-    SerialPSO(num_particles, θ, γ, h)
+    return SerialPSO(num_particles, θ, γ, h)
 end
 
 SciMLBase.allowsbounds(::PSOAlgorithm) = true
@@ -141,7 +144,7 @@ struct LBFGS
 end
 
 function LBFGS(; threshold = 10)
-    LBFGS(threshold)
+    return LBFGS(threshold)
 end
 
 struct BFGS end
@@ -155,8 +158,9 @@ end
 function HybridPSO(;
         backend = CPU(),
         pso = ParallelParticleSwarms.ParallelPSOKernel(100; global_update = false, backend),
-        local_opt = LBFGS())
-    HybridPSO(pso, local_opt, backend)
+        local_opt = LBFGS()
+    )
+    return HybridPSO(pso, local_opt, backend)
 end
 
 SciMLBase.allowsbounds(::HybridPSOAlgorithm{LocalOpt}) where {LocalOpt} = true

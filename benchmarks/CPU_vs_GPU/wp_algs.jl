@@ -13,7 +13,7 @@ function rosenbrock(x, p)
     for i in 1:(length(x) - 1)
         res += p[2] * (x[i + 1] - x[i]^2)^2 + (p[1] - x[i])^2
     end
-    res
+    return res
 end
 # x0 = @SArray zeros(Float32, N)
 
@@ -33,34 +33,46 @@ sol = solve(prob, ParallelSyncPSOKernel(n_particles; backend = CPU()), maxiters 
 @show sol.objective
 @show sol.stats.time
 
-sol = solve(prob,
+sol = solve(
+    prob,
     ParallelSyncPSOKernel(n_particles; backend = CUDABackend()),
-    maxiters = 500)
+    maxiters = 500
+)
 
 @show sol.objective
 @show sol.stats.time
 
-sol = solve(prob,
+sol = solve(
+    prob,
     ParallelPSOKernel(n_particles; backend = CUDABackend(), global_update = false),
-    maxiters = 500)
+    maxiters = 500
+)
 
 @show sol.objective
 @show sol.stats.time
 
-sol = solve(prob,
+sol = solve(
+    prob,
     ParallelPSOKernel(n_particles; backend = CUDABackend(), global_update = true),
-    maxiters = 500)
+    maxiters = 500
+)
 
 @show sol.objective
 @show sol.stats.time
 
-sol = solve(prob,
-    ParallelParticleSwarms.HybridPSO(; backend = CUDABackend(),
-        pso = ParallelParticleSwarms.ParallelPSOKernel(n_particles;
+sol = solve(
+    prob,
+    ParallelParticleSwarms.HybridPSO(;
+        backend = CUDABackend(),
+        pso = ParallelParticleSwarms.ParallelPSOKernel(
+            n_particles;
             global_update = false,
-            backend = CUDABackend()),
-        local_opt = ParallelParticleSwarms.LBFGS()), maxiters = 500,
-    local_maxiters = 30)
+            backend = CUDABackend()
+        ),
+        local_opt = ParallelParticleSwarms.LBFGS()
+    ), maxiters = 500,
+    local_maxiters = 30
+)
 
 @show sol.objective
 @show sol.stats.time
@@ -99,52 +111,66 @@ function solve_run(prob, alg, maxiters; runs = 10, kwargs...)
         push!(losses, sol.objective)
         push!(times, sol.stats.time)
     end
-    minimum(losses), minimum(times)
+    return minimum(losses), minimum(times)
 end
 
 for n_particles in Ns
     @info n_particles
 
     obj,
-    sol_time = solve_run(prob,
+        sol_time = solve_run(
+        prob,
         ParallelSyncPSOKernel(n_particles; backend = CPU()),
-        500)
+        500
+    )
 
     push!(cpu_loss, obj)
     push!(cpu_times, sol_time)
 
     obj,
-    sol_time = solve_run(prob,
+        sol_time = solve_run(
+        prob,
         ParallelSyncPSOKernel(n_particles; backend = CUDABackend()),
-        500)
+        500
+    )
 
     push!(gpu_sync_loss, obj)
     push!(gpu_sync_times, sol_time)
 
     obj,
-    sol_time = solve_run(prob,
+        sol_time = solve_run(
+        prob,
         ParallelPSOKernel(n_particles; backend = CUDABackend(), global_update = false),
-        500)
+        500
+    )
 
     push!(gpu_async_loss, obj)
     push!(gpu_async_times, sol_time)
 
     obj,
-    sol_time = solve_run(prob,
+        sol_time = solve_run(
+        prob,
         ParallelPSOKernel(n_particles; backend = CUDABackend(), global_update = true),
         500;
-        runs = 2)
+        runs = 2
+    )
 
     push!(gpu_queue_lock_loss, obj)
     push!(gpu_queue_lock_times, sol_time)
 
     obj,
-    solve_time = solve_run(prob,
-        ParallelParticleSwarms.HybridPSO(; backend = CUDABackend(),
-            pso = ParallelParticleSwarms.ParallelPSOKernel(n_particles;
+        solve_time = solve_run(
+        prob,
+        ParallelParticleSwarms.HybridPSO(;
+            backend = CUDABackend(),
+            pso = ParallelParticleSwarms.ParallelPSOKernel(
+                n_particles;
                 global_update = false,
-                backend = CUDABackend()),
-            local_opt = ParallelParticleSwarms.LBFGS()), 500)
+                backend = CUDABackend()
+            ),
+            local_opt = ParallelParticleSwarms.LBFGS()
+        ), 500
+    )
 
     push!(gpu_hybrid_loss, obj)
     push!(gpu_hybrid_times, solve_time)
@@ -163,7 +189,8 @@ yticks = 10 .^ round.(range(-6, 5, length = 12), digits = 2)
 
 xticks = 10 .^ round.(range(1, -3, length = 9), digits = 2)
 
-plt = plot(gpu_sync_times,
+plt = plot(
+    gpu_sync_times,
     gpu_sync_loss,
     xaxis = :log,
     yaxis = :log,
@@ -179,7 +206,8 @@ plt = plot(gpu_sync_times,
     dpi = 600    # color = :Green
 )
 
-plt = plot!(cpu_times,
+plt = plot!(
+    cpu_times,
     cpu_loss,
     xaxis = :log,
     yaxis = :log,
@@ -187,9 +215,11 @@ plt = plot!(cpu_times,
     label = "ParallelSyncPSOKernel: CPU",
     marker = :circle,
     # color = :Orange
-    ls = :dash)
+    ls = :dash
+)
 
-plt = plot!(gpu_async_times,
+plt = plot!(
+    gpu_async_times,
     gpu_async_loss,
     xaxis = :log,
     yaxis = :log,
@@ -198,7 +228,8 @@ plt = plot!(gpu_async_times,
     marker = :circle    # color = :Green
 )
 
-plt = plot!(gpu_queue_lock_times,
+plt = plot!(
+    gpu_queue_lock_times,
     gpu_queue_lock_loss,
     xaxis = :log,
     yaxis = :log,
@@ -207,7 +238,8 @@ plt = plot!(gpu_queue_lock_times,
     marker = :circle    # color = :Green
 )
 
-plt = plot!(gpu_hybrid_times,
+plt = plot!(
+    gpu_hybrid_times,
     gpu_hybrid_loss,
     xaxis = :log,
     yaxis = :log,
@@ -223,7 +255,7 @@ function rosenbrock(x, p)
     @inbounds for i in 1:(length(x) - 1)
         loss += p[2] * sin(1.5f0 * x[i])^2 * (x[i + 1] - x[i]^2)^2 + (p[1] - x[i])^2
     end
-    loss
+    return loss
     # sum(p[2] * exp(-x[i]^2) * (x[i + 1] - x[i]^2)^2 + (p[1] - x[i])^2 for i in 1:(length(x) - 1))
 end
 # x0 = @SArray zeros(Float32, N)
@@ -253,20 +285,28 @@ using OptimizationFlux, OptimizationBBO, OptimizationOptimJL
 
 n_particles = 16384
 
-sol = solve(prob,
+sol = solve(
+    prob,
     ParallelPSOKernel(n_particles; backend = CUDABackend(), global_update = true),
-    maxiters = 1000)
+    maxiters = 1000
+)
 
 @show sol.objective
 @show sol.stats.time
 
-sol = solve(prob,
-    ParallelParticleSwarms.HybridPSO(; backend = CUDABackend(),
-        pso = ParallelParticleSwarms.ParallelPSOKernel(n_particles;
+sol = solve(
+    prob,
+    ParallelParticleSwarms.HybridPSO(;
+        backend = CUDABackend(),
+        pso = ParallelParticleSwarms.ParallelPSOKernel(
+            n_particles;
             global_update = false,
-            backend = CUDABackend()),
-        local_opt = ParallelParticleSwarms.LBFGS()), maxiters = 500,
-    local_maxiters = 30)
+            backend = CUDABackend()
+        ),
+        local_opt = ParallelParticleSwarms.LBFGS()
+    ), maxiters = 500,
+    local_maxiters = 30
+)
 
 @show sol.objective
 @show sol.stats.time
@@ -276,11 +316,13 @@ sol = solve(prob,
 # uncons_prob = remake(prob; lb = nothing, ub = nothing)
 x0 = @SArray fill(5.0f0, N)
 uncons_prob = OptimizationProblem(optf, Array(x0), Array(p))
-arr_prob = OptimizationProblem(rosenbrock,
+arr_prob = OptimizationProblem(
+    rosenbrock,
     Array(Float64.(x0)),
     Array(Float64.(p));
     lb = Array(Float64.(lb)),
-    ub = Array(Float64.(ub)))
+    ub = Array(Float64.(ub))
+)
 
 ## Adam is similar in speed and not GPU accelerated. The loss is much better.
 ## Might not be good enough for a comparison here.
@@ -289,12 +331,14 @@ sol = solve(uncons_prob, ADAM(), maxiters = 30)
 @show sol.objective
 @show sol.stats.time
 
-sol = solve(uncons_prob,
+sol = solve(
+    uncons_prob,
     LBFGS(),
     reltol = -Inf,
     x_tol = -Inf,
     f_abstol = -Inf,
-    x_reltol = -Inf)
+    x_reltol = -Inf
+)
 
 @show sol.objective
 @show sol.stats.time
@@ -313,7 +357,7 @@ function solve_run(prob, alg, maxiters; runs = 10, kwargs...)
         push!(losses, sol.objective)
         push!(times, sol.stats.time)
     end
-    minimum(losses), minimum(times)
+    return minimum(losses), minimum(times)
 end
 
 begin
@@ -336,13 +380,15 @@ begin
         @info iters
 
         obj,
-        sol_time = solve_run(uncons_prob,
+            sol_time = solve_run(
+            uncons_prob,
             LBFGS(),
             iters;
             reltol = -Inf,
             x_tol = -Inf,
             f_abstol = -Inf,
-            x_reltol = -Inf)
+            x_reltol = -Inf
+        )
 
         # sol = solve(uncons_prob, LBFGS(), maxiters = iters)
 
@@ -369,17 +415,21 @@ begin
         # maxiters = iters)
 
         obj,
-        sol_time = solve_run(prob,
+            sol_time = solve_run(
+            prob,
             ParallelPSOKernel(n_particles; backend = CUDABackend(), global_update = true),
-            iters)
+            iters
+        )
 
         push!(queue_lock_losses, obj)
         push!(queue_lock_time, sol_time)
 
         obj,
-        sol_time = solve_run(prob,
+            sol_time = solve_run(
+            prob,
             ParallelSyncPSOKernel(n_particles; backend = CPU()),
-            iters)
+            iters
+        )
 
         push!(pso_cpu_losses, obj)
         push!(pso_cpu_time, sol_time)
@@ -397,12 +447,18 @@ begin
         #         local_maxiters = iters)
 
         obj,
-        solve_time = solve_run(prob,
-            ParallelParticleSwarms.HybridPSO(; backend = CUDABackend(),
-                pso = ParallelParticleSwarms.ParallelPSOKernel(n_particles;
+            solve_time = solve_run(
+            prob,
+            ParallelParticleSwarms.HybridPSO(;
+                backend = CUDABackend(),
+                pso = ParallelParticleSwarms.ParallelPSOKernel(
+                    n_particles;
                     global_update = false,
-                    backend = CUDABackend()),
-                local_opt = ParallelParticleSwarms.LBFGS()), iters)
+                    backend = CUDABackend()
+                ),
+                local_opt = ParallelParticleSwarms.LBFGS()
+            ), iters
+        )
 
         push!(hybrid_losses, obj)
         push!(hybrid_time, solve_time)
@@ -412,9 +468,11 @@ begin
         # sol = solve(arr_prob, BBO_adaptive_de_rand_1_bin_radiuslimited(), maxiters = iters)
 
         obj,
-        sol_time = solve_run(arr_prob,
+            sol_time = solve_run(
+            arr_prob,
             BBO_adaptive_de_rand_1_bin_radiuslimited(),
-            iters * 100)
+            iters * 100
+        )
 
         push!(bbo_losses, obj)
         push!(bbo_time, sol_time)
@@ -431,7 +489,8 @@ xticks = 10 .^ round.(range(1, -4, length = 11), digits = 2)
 
 @. lbfgs_losses += 1.0f-8
 
-plt = plot(lbfgs_time,
+plt = plot(
+    lbfgs_time,
     lbfgs_losses,
     xaxis = :log,
     yaxis = :log,
@@ -447,7 +506,8 @@ plt = plot(lbfgs_time,
     dpi = 600    # color = :Green
 )
 
-plt = plot!(adam_time,
+plt = plot!(
+    adam_time,
     adam_losses,
     xaxis = :log,
     yaxis = :log,
@@ -456,7 +516,8 @@ plt = plot!(adam_time,
     marker = :circle    # color = :Orange
 )
 
-plt = plot!(pso_cpu_time,
+plt = plot!(
+    pso_cpu_time,
     pso_cpu_losses,
     # xaxis = :log,
     # yaxis = :log,
@@ -465,7 +526,8 @@ plt = plot!(pso_cpu_time,
     marker = :circle    # color = :Green
 )
 
-plt = plot!(queue_lock_time,
+plt = plot!(
+    queue_lock_time,
     queue_lock_losses,
     xaxis = :log,
     yaxis = :log,
@@ -474,7 +536,8 @@ plt = plot!(queue_lock_time,
     marker = :circle    # color = :Orange
 )
 
-plt = plot!(hybrid_time,
+plt = plot!(
+    hybrid_time,
     hybrid_losses,
     xaxis = :log,
     yaxis = :log,
@@ -483,7 +546,8 @@ plt = plot!(hybrid_time,
     marker = :circle    # color = :Orange
 )
 
-plt = plot!(bbo_time,
+plt = plot!(
+    bbo_time,
     bbo_losses,
     # xaxis = :log,
     # yaxis = :log,
