@@ -1,11 +1,14 @@
+@inline _rand_like(x::SArray) = rand(typeof(x))
+@inline _rand_like(x::AbstractArray) = rand(eltype(x), size(x)...)
+
 @inline function update_particle_state(particle, prob, gbest, w, c1, c2, iter, opt)
     updated_velocity = w .* particle.velocity .+
-        c1 .* rand(typeof(particle.velocity)) .*
+        c1 .* _rand_like(particle.velocity) .*
         (
         particle.best_position -
             particle.position
     ) .+
-        c2 .* rand(typeof(particle.velocity)) .*
+        c2 .* _rand_like(particle.velocity) .*
         (gbest.position - particle.position)
 
     @set! particle.velocity = updated_velocity
