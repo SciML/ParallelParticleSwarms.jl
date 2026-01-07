@@ -21,7 +21,7 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
 Adapt = "4.3"
-DiffEqGPU = "3.4"
+DiffEqGPU = "3.9"
 Enzyme = "0.13"
 ForwardDiff = "0.10, 1.3"
 KernelAbstractions = "0.9"
