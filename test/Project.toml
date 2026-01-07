@@ -1,5 +1,7 @@
 [deps]
+ArrayInterface = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
 JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
+JLArrays = "27aeb0d3-9eb9-45fb-866b-73c2ecf80fcb"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Optimization = "7f7a1694-90dd-40f0-9382-eb1efda571ba"
@@ -11,7 +13,9 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
+ArrayInterface = "7"
 JET = "0.11"
+JLArrays = "0.3"
 KernelAbstractions = "0.9.39"
 Optimization = "5.2.0"
 QuasiMonteCarlo = "0.3.3"

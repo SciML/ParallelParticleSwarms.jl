@@ -6,6 +6,7 @@ global CI_GROUP = get(ENV, "GROUP", "CPU")
 @safetestset "Regression tests" include("./regression.jl")
 @safetestset "Reinitialization tests" include("./reinit.jl")
 @safetestset "JET static analysis" include("./jet.jl")
+@safetestset "Interface compatibility tests" include("./interface.jl")
 
 #TODO: Curent throws warning for redefinition with the use of @testset multiple times. Migrate to TestItemRunners.jl
 @testset for BACKEND in unique(("CPU", CI_GROUP))
