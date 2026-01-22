@@ -8,22 +8,17 @@
 
         updated_velocity = w .* particle.velocity .+
             c1 .* rand(typeof(particle.velocity)) .*
-            (
-            particle.best_position -
-                particle.position
-        ) .+
+            (particle.best_position - particle.position) .+
             c2 .* rand(typeof(particle.velocity)) .*
             (gbest.position - particle.position)
 
         @set! particle.velocity = updated_velocity
-
         @set! particle.position = particle.position + particle.velocity
 
         update_pos = max(particle.position, lb)
         update_pos = min(update_pos, ub)
 
         @set! particle.position = update_pos
-
         @inbounds gpu_particles[i] = particle
     end
 end
@@ -49,8 +44,15 @@ function default_prob_func(prob, gpu_particle)
     return remake(prob, p = gpu_particle.position)
 end
 
+@inline function _reduce_losses!(losses, gpu_data, us)
+    loss_mat = map(x -> sum(x .^ 2), gpu_data .- us)
+    loss_view = ndims(losses) == 1 ? reshape(losses, 1, :) : losses
+    sum!(loss_view, loss_mat)
+    return losses
+end
+
 function parameter_estim_ode!(
-        prob::ODEProblem, cache,
+        prob::SciMLBase.AbstractODEProblem, cache,
         lb,
         ub, ::Val{true};
         ode_alg = GPUTsit5(),
@@ -59,12 +61,10 @@ function parameter_estim_ode!(
         wdamp = 1.0f0,
         maxiters = 100, kwargs...
     )
-    (losses, gpu_particles, gpu_data, gbest) = cache
+    (losses, gpu_particles, gpu_data, gbest, probs) = cache
     backend = get_backend(gpu_particles)
     update_states! = ParallelParticleSwarms.ode_update_particle_states!(backend)
     update_costs! = ParallelParticleSwarms.ode_update_particle_costs!(backend)
-
-    improb = make_prob_compatible(prob)
 
     for i in 1:maxiters
         update_states!(
@@ -78,10 +78,9 @@ function parameter_estim_ode!(
 
         KernelAbstractions.synchronize(backend)
 
-        probs = prob_func.(Ref(improb), gpu_particles)
+        probs = prob_func.(probs, gpu_particles)
 
         KernelAbstractions.synchronize(backend)
-
         ###TODO: Somehow vectorized_asolve hangs and does not here :(
 
         ts, us = vectorized_asolve(
@@ -92,7 +91,7 @@ function parameter_estim_ode!(
 
         KernelAbstractions.synchronize(backend)
 
-        sum!(losses, (map(x -> sum(x .^ 2), gpu_data .- us)))
+        _reduce_losses!(losses, gpu_data, us)
 
         update_costs!(losses, gpu_particles; ndrange = length(losses))
 
@@ -111,7 +110,7 @@ function parameter_estim_ode!(
 end
 
 function parameter_estim_ode!(
-        prob::ODEProblem, cache,
+        prob::SciMLBase.AbstractODEProblem, cache,
         lb,
         ub, ::Val{false};
         ode_alg = GPUTsit5(),
@@ -120,12 +119,10 @@ function parameter_estim_ode!(
         wdamp = 1.0f0,
         maxiters = 100, kwargs...
     )
-    (losses, gpu_particles, gpu_data, gbest) = cache
+    (losses, gpu_particles, gpu_data, gbest, probs) = cache
     backend = get_backend(gpu_particles)
     update_states! = ParallelParticleSwarms.ode_update_particle_states!(backend)
     update_costs! = ParallelParticleSwarms.ode_update_particle_costs!(backend)
-
-    improb = make_prob_compatible(prob)
 
     for i in 1:maxiters
         update_states!(
@@ -139,10 +136,9 @@ function parameter_estim_ode!(
 
         KernelAbstractions.synchronize(backend)
 
-        probs = prob_func.(Ref(improb), gpu_particles)
+        probs = prob_func.(probs, gpu_particles)
 
         KernelAbstractions.synchronize(backend)
-
         ###TODO: Somehow vectorized_asolve hangs and does not here :(
 
         ts, us = vectorized_solve(
@@ -153,7 +149,7 @@ function parameter_estim_ode!(
 
         KernelAbstractions.synchronize(backend)
 
-        sum!(losses, (map(x -> sum(x .^ 2), gpu_data .- us)))
+        _reduce_losses!(losses, gpu_data, us)
 
         update_costs!(losses, gpu_particles; ndrange = length(losses))
 
