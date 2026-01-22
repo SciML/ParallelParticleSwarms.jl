@@ -379,4 +379,3 @@ end
     expected = vec(sum(map(x -> sum(x .^ 2), gpu_data .- us), dims = 1))
     @test vec(losses_2d) == expected
 end
-
