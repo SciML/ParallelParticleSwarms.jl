@@ -333,3 +333,50 @@ end
 
     @test sol.objective < 4.0e-1
 end
+
+@testset "GPU-PSO loss reduction (CPU)" begin
+    Random.seed!(123)
+    m = 5
+    n = 7
+    gpu_data = [@SVector Float32[1, 2] for _ in 1:m]
+    us = reshape([@SVector Float32[0, 0] for _ in 1:(m * n)], m, n)
+    losses = zeros(Float32, n)
+
+    ParallelParticleSwarms._reduce_losses!(losses, gpu_data, us)
+
+    loss_mat = map(x -> sum(x .^ 2), gpu_data .- us)
+    @test losses == vec(sum(loss_mat, dims = 1))
+end
+
+@testset "NeuralODE tuple params prob_func" begin
+    u0 = @SVector Float32[1.0, -1.0]
+    tspan = (0.0f0, 1.0f0)
+    nn = (u, p) -> u .+ p[1]
+    p_static = @SVector Float32[2.0, 3.0]
+    prob = ODEProblem{false}((u, p, t) -> p[1](u, p[2]), u0, tspan, (nn, p_static))
+
+    new_pos = @SVector Float32[5.0, 6.0]
+    particle = ParallelParticleSwarms.SPSOParticle(new_pos, new_pos, 0.0f0, new_pos, 0.0f0)
+
+    function prob_func(prob_local, gpu_particle)
+        return remake(prob_local, p = (prob_local.p[1], gpu_particle.position))
+    end
+
+    updated = prob_func(prob, particle)
+    @test updated.p[1] === prob.p[1]
+    @test updated.p[2] == new_pos
+end
+
+@testset "_reduce_losses! with 2D losses array" begin
+    Random.seed!(123)
+    m, n = 5, 7
+    gpu_data = [@SVector Float32[1, 2] for _ in 1:m]
+    us = reshape([@SVector Float32[0, 0] for _ in 1:(m * n)], m, n)
+    losses_2d = zeros(Float32, 1, n)
+
+    ParallelParticleSwarms._reduce_losses!(losses_2d, gpu_data, us)
+
+    expected = vec(sum(map(x -> sum(x .^ 2), gpu_data .- us), dims = 1))
+    @test vec(losses_2d) == expected
+end
+

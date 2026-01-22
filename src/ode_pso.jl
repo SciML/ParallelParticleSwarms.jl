@@ -44,6 +44,13 @@ function default_prob_func(prob, gpu_particle)
     return remake(prob, p = gpu_particle.position)
 end
 
+@inline function _reduce_losses!(losses, gpu_data, us)
+    loss_mat = map(x -> sum(x .^ 2), gpu_data .- us)
+    loss_view = ndims(losses) == 1 ? reshape(losses, 1, :) : losses
+    sum!(loss_view, loss_mat)
+    return losses
+end
+
 function parameter_estim_ode!(
         prob::SciMLBase.AbstractODEProblem, cache,
         lb,
@@ -84,9 +91,7 @@ function parameter_estim_ode!(
 
         KernelAbstractions.synchronize(backend)
 
-        loss_mat = map(x -> sum(x .^ 2), gpu_data .- us)
-        loss_view = ndims(losses) == 1 ? reshape(losses, 1, :) : losses
-        sum!(loss_view, loss_mat)
+        _reduce_losses!(losses, gpu_data, us)
 
         update_costs!(losses, gpu_particles; ndrange = length(losses))
 
@@ -144,9 +149,7 @@ function parameter_estim_ode!(
 
         KernelAbstractions.synchronize(backend)
 
-        loss_mat = map(x -> sum(x .^ 2), gpu_data .- us)
-        loss_view = ndims(losses) == 1 ? reshape(losses, 1, :) : losses
-        sum!(loss_view, loss_mat)
+        _reduce_losses!(losses, gpu_data, us)
 
         update_costs!(losses, gpu_particles; ndrange = length(losses))
 
@@ -163,3 +166,4 @@ function parameter_estim_ode!(
     end
     return gbest
 end
+
