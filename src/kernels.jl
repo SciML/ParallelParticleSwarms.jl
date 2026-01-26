@@ -38,7 +38,7 @@ end
 @kernel function update_particle_states!(
         prob,
         gpu_particles::AbstractArray{SPSOParticle{T1, T2}}, gbest_ref, w,
-        opt::ParallelPSOKernel, lock; c1 = 1.4962f0,
+        opt::ParallelPSOKernel, lock::AbstractArray{UInt32}; c1 = 1.4962f0,
         c2 = 1.4962f0
     ) where {T1, T2}
     i = @index(Global, Linear)
@@ -109,7 +109,12 @@ end
             end
 
             # Release lock
-            @atomicswap lock[1] = 0
+            while true
+                res = @atomicreplace lock[1] UInt32(1) => UInt32(0)
+                if res.success
+                    break
+                end
+            end
         end
     end
     @inbounds gpu_particles[i] = particle[1]
