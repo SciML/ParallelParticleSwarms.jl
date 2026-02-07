@@ -45,43 +45,50 @@ end
     tidx = @index(Local, Linear)
 
     @uniform gs = @groupsize()[1]
+    @uniform n = length(gpu_particles)
 
     best_queue = @localmem SPSOGBest{T1, T2} (gs)
     queue_num = @localmem UInt32 1
 
     particle = @private SPSOParticle{T1, T2} 1
 
-    @inbounds particle[1] = gpu_particles[i]
+    if i <= n
+        @inbounds particle[1] = gpu_particles[i]
+    end
     # Initialize cost to be Inf
     if tidx == 1
         fill!(
             best_queue,
-            SPSOGBest(particle[1].position, convert(typeof(particle[1].cost), Inf))
+            SPSOGBest(gbest_ref[1].position, convert(typeof(gbest_ref[1].cost), Inf))
         )
         queue_num[1] = UInt32(0)
     end
 
     @synchronize
 
-    @inbounds particle[1] = update_particle_state(
-        particle[1],
-        prob,
-        gbest_ref[1],
-        w,
-        c1,
-        c2,
-        i,
-        opt
-    )
+    if i <= n
+        @inbounds particle[1] = update_particle_state(
+            particle[1],
+            prob,
+            gbest_ref[1],
+            w,
+            c1,
+            c2,
+            i,
+            opt
+        )
+    end
 
     @synchronize
 
-    @inbounds if particle[1].best_cost < gbest_ref[1].cost
-        queue_idx = @atomic queue_num[1] += UInt32(1)
-        @inbounds best_queue[queue_idx] = SPSOGBest(
-            particle[1].best_position,
-            particle[1].best_cost
-        )
+    if i <= n
+        @inbounds if particle[1].best_cost < gbest_ref[1].cost
+            queue_idx = @atomic queue_num[1] += UInt32(1)
+            @inbounds best_queue[queue_idx] = SPSOGBest(
+                particle[1].best_position,
+                particle[1].best_cost
+            )
+        end
     end
 
     @synchronize
@@ -109,15 +116,12 @@ end
             end
 
             # Release lock
-            while true
-                res = @atomicreplace lock[1] UInt32(1) => UInt32(0)
-                if res.success
-                    break
-                end
-            end
+            @atomicreplace lock[1] UInt32(1) => UInt32(0)
         end
     end
-    @inbounds gpu_particles[i] = particle[1]
+    if i <= n
+        @inbounds gpu_particles[i] = particle[1]
+    end
 end
 
 @kernel function update_particle_states!(
@@ -131,6 +135,7 @@ end
     gidx = @index(Group, Linear)
 
     @uniform gs = @groupsize()[1]
+    @uniform n = length(gpu_particles)
 
     group_particles = @localmem SPSOGBest{T1, T2} (gs)
 
@@ -140,11 +145,13 @@ end
 
     @synchronize
 
-    @inbounds particle = gpu_particles[i]
+    if i <= n
+        @inbounds particle = gpu_particles[i]
 
-    particle = update_particle_state(particle, prob, gbest, w, c1, c2, i, opt)
+        particle = update_particle_state(particle, prob, gbest, w, c1, c2, i, opt)
 
-    @inbounds group_particles[tidx] = SPSOGBest(particle.best_position, particle.best_cost)
+        @inbounds group_particles[tidx] = SPSOGBest(particle.best_position, particle.best_cost)
+    end
 
     stride = gs ÷ 2
 
@@ -164,7 +171,9 @@ end
         @inbounds block_particles[gidx] = group_particles[tidx]
     end
 
-    @inbounds gpu_particles[i] = particle
+    if i <= n
+        @inbounds gpu_particles[i] = particle
+    end
 end
 
 # Why you say we need a different code for CPUs for sync version? Turns out
@@ -194,21 +203,23 @@ end
     )
     i = @index(Global, Linear)
 
-    gbest = gbest_ref[1]
+    if i <= length(gpu_particles)
+        gbest = gbest_ref[1]
 
-    ## Access the particle
-    @inbounds particle = gpu_particles[i]
+        ## Access the particle
+        @inbounds particle = gpu_particles[i]
 
-    ## Run all generations
-    for i in 1:maxiters
-        particle = update_particle_state(particle, prob, gbest, w, c1, c2, i, opt)
-        if particle.best_cost < gbest.cost
-            @set! gbest.position = particle.best_position
-            @set! gbest.cost = particle.best_cost
+        ## Run all generations
+        for iter in 1:maxiters
+            particle = update_particle_state(particle, prob, gbest, w, c1, c2, iter, opt)
+            if particle.best_cost < gbest.cost
+                @set! gbest.position = particle.best_position
+                @set! gbest.cost = particle.best_cost
+            end
+            w = w * wdamp
         end
-        w = w * wdamp
-    end
 
-    @inbounds gpu_particles[i] = particle
-    @inbounds gbest_ref[1] = gbest
+        @inbounds gpu_particles[i] = particle
+        @inbounds gbest_ref[1] = gbest
+    end
 end
