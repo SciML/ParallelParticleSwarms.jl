@@ -11,6 +11,7 @@ function vectorized_solve!(
 
     ## TODO: Get dynamic workgroupsize
     workgroupsize = (min(length(gpu_particles), 1024),)
+    padded_ndrange = cld(length(gpu_particles), workgroupsize[1]) * workgroupsize[1]
 
     update_particle_kernel = update_particle_states!(backend, workgroupsize)
 
@@ -25,7 +26,7 @@ function vectorized_solve!(
             gpu_particles, block_particles,
             gbest,
             w, opt;
-            ndrange = length(gpu_particles), workgroupsize
+            ndrange = padded_ndrange
         )
         gbest = minimum(block_particles)
         w = w * wdamp
@@ -78,12 +79,13 @@ function vectorized_solve!(
     backend = get_backend(gpu_particles)
 
     kernel = update_particle_states!(backend, 1024)
+    padded_ndrange = cld(length(gpu_particles), 1024) * 1024
 
     lock = KernelAbstractions.allocate(backend, UInt32, 1)
     fill!(lock, UInt32(0))
     for i in 1:maxiters
         ## Invoke GPU Kernel here
-        kernel(prob, gpu_particles, gbest, w, opt, lock; ndrange = length(gpu_particles))
+        kernel(prob, gpu_particles, gbest, w, opt, lock; ndrange = padded_ndrange)
         w = w * wdamp
     end
 
@@ -102,6 +104,7 @@ function vectorized_solve!(
     backend = get_backend(gpu_particles)
 
     kernel = update_particle_states_async!(backend)
+    padded_ndrange = cld(length(gpu_particles), 256) * 256
     kernel(
         prob,
         gpu_particles,
@@ -110,7 +113,7 @@ function vectorized_solve!(
         wdamp,
         maxiters,
         opt;
-        ndrange = length(gpu_particles)
+        ndrange = padded_ndrange
     )
 
     best_particle = minimum(gpu_particles)

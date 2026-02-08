@@ -65,6 +65,8 @@ function parameter_estim_ode!(
     backend = get_backend(gpu_particles)
     update_states! = ParallelParticleSwarms.ode_update_particle_states!(backend)
     update_costs! = ParallelParticleSwarms.ode_update_particle_costs!(backend)
+    padded_particles = cld(length(gpu_particles), 256) * 256
+    padded_losses = cld(length(losses), 256) * 256
 
     for i in 1:maxiters
         update_states!(
@@ -73,7 +75,7 @@ function parameter_estim_ode!(
             ub,
             gbest,
             w;
-            ndrange = length(gpu_particles)
+            ndrange = padded_particles
         )
 
         KernelAbstractions.synchronize(backend)
@@ -81,7 +83,6 @@ function parameter_estim_ode!(
         probs = prob_func.(probs, gpu_particles)
 
         KernelAbstractions.synchronize(backend)
-        ###TODO: Somehow vectorized_asolve hangs and does not here :(
 
         ts, us = vectorized_asolve(
             probs,
@@ -93,7 +94,7 @@ function parameter_estim_ode!(
 
         _reduce_losses!(losses, gpu_data, us)
 
-        update_costs!(losses, gpu_particles; ndrange = length(losses))
+        update_costs!(losses, gpu_particles; ndrange = padded_losses)
 
         KernelAbstractions.synchronize(backend)
 
@@ -123,6 +124,8 @@ function parameter_estim_ode!(
     backend = get_backend(gpu_particles)
     update_states! = ParallelParticleSwarms.ode_update_particle_states!(backend)
     update_costs! = ParallelParticleSwarms.ode_update_particle_costs!(backend)
+    padded_particles = cld(length(gpu_particles), 256) * 256
+    padded_losses = cld(length(losses), 256) * 256
 
     for i in 1:maxiters
         update_states!(
@@ -131,7 +134,7 @@ function parameter_estim_ode!(
             ub,
             gbest,
             w;
-            ndrange = length(gpu_particles)
+            ndrange = padded_particles
         )
 
         KernelAbstractions.synchronize(backend)
@@ -139,7 +142,6 @@ function parameter_estim_ode!(
         probs = prob_func.(probs, gpu_particles)
 
         KernelAbstractions.synchronize(backend)
-        ###TODO: Somehow vectorized_asolve hangs and does not here :(
 
         ts, us = vectorized_solve(
             probs,
@@ -151,7 +153,7 @@ function parameter_estim_ode!(
 
         _reduce_losses!(losses, gpu_data, us)
 
-        update_costs!(losses, gpu_particles; ndrange = length(losses))
+        update_costs!(losses, gpu_particles; ndrange = padded_losses)
 
         KernelAbstractions.synchronize(backend)
 
