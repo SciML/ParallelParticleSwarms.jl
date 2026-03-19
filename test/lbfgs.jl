@@ -2,6 +2,11 @@ using ParallelParticleSwarms, Optimization, StaticArrays
 
 include("./utils.jl")
 
+# Reclaim GPU memory from previous test files to avoid OOM
+if GROUP == "CUDA"
+    CUDA.reclaim()
+end
+
 function objf(x, p)
     return 1 - x[1]^2 - x[2]^2
 end
