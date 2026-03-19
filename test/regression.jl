@@ -29,7 +29,8 @@ using QuasiMonteCarlo
     )
 
     # Use out-of-place form {false} since SVector is immutable
-    prob = OptimizationProblem{false}(rosenbrock, x0, p; lb = lb, ub = ub)
+    opt_f = OptimizationFunction{false}(rosenbrock)
+    prob = OptimizationProblem(opt_f, x0, p; lb = lb, ub = ub)
 
     n_particles = 2000
 
@@ -226,7 +227,8 @@ end
     )
 
     # Use out-of-place form {false} since SVector is immutable
-    prob = OptimizationProblem{false}(rosenbrock, x0, p; lb = lb, ub = ub)
+    opt_f = OptimizationFunction{false}(rosenbrock)
+    prob = OptimizationProblem(opt_f, x0, p; lb = lb, ub = ub)
 
     n_particles = 2000
 
