@@ -19,7 +19,8 @@ lb = @SVector [0.0f0, 0.0f0]
 ub = @SVector [2.0f0, 2.0f0]
 lcons = @SVector [-Inf32, -Inf32]
 ucons = @SVector [0.0f0, 0.0f0]
-prob = OptimizationProblem(opt_f, x0, p, lcons = lcons, ucons = ucons, lb = lb, ub = ub)
+# Use out-of-place form {false} since SVector is immutable
+prob = OptimizationProblem{false}(opt_f, x0, p, lcons = lcons, ucons = ucons, lb = lb, ub = ub)
 
 n_particles = 1000
 

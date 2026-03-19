@@ -21,7 +21,8 @@ include("./utils.jl")
     x0 = @SArray zeros(Float32, N)
     p = @SArray Float32[1.0, 100.0]
 
-    prob = OptimizationProblem(rosenbrock, x0, p; lb = lb, ub = ub)
+    # Use out-of-place form {false} since SVector is immutable
+    prob = OptimizationProblem{false}(rosenbrock, x0, p; lb = lb, ub = ub)
 
     n_particles = 5000
 
