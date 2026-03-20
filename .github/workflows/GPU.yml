@@ -17,7 +17,7 @@ concurrency:
 jobs:
   cuda-tests:
     name: "CUDA Tests (Julia ${{ matrix.version }})"
-    runs-on: [self-hosted, gpu-v100]
+    runs-on: [self-hosted, Linux, X64, gpu-t4]
     timeout-minutes: 120
     strategy:
       fail-fast: false
@@ -34,9 +34,6 @@ jobs:
             import Pkg
             Pkg.add(; name = "CUDA")'
           rm -f test/Manifest.toml
-      - name: Pin CUDA 12.6 for V100 compatibility
-        run: |
-          printf '[CUDA_Runtime_jll]\nversion = "12.6"\n' > test/LocalPreferences.toml
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
         env:
