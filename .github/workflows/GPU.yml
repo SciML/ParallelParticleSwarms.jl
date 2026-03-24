@@ -17,7 +17,7 @@ concurrency:
 jobs:
   cuda-tests:
     name: "CUDA Tests (Julia ${{ matrix.version }})"
-    runs-on: [self-hosted, Linux, X64, gpu-t4]
+    runs-on: [self-hosted, gpu-v100]
     timeout-minutes: 120
     strategy:
       fail-fast: false
@@ -32,7 +32,7 @@ jobs:
       - run: |
           julia --project=test -e '
             import Pkg
-            Pkg.add(; name = "CUDA")'
+            Pkg.add(; name = "CUDA", version = "5.0 - 5.10")'
           rm -f test/Manifest.toml
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1

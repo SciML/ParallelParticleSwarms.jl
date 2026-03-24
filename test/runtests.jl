@@ -11,6 +11,8 @@ global CI_GROUP = get(ENV, "GROUP", "CPU")
 @testset for BACKEND in unique(("CPU", CI_GROUP))
     global GROUP = BACKEND
     @testset "$(BACKEND) optimizers tests" include("./gpu.jl")
+    GC.gc(true)
     @testset "$(BACKEND) optimizers with constraints tests" include("./constraints.jl")
+    GC.gc(true)
     @testset "$(BACKEND) hybrid optimizers" include("./lbfgs.jl")
 end

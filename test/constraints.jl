@@ -12,7 +12,8 @@ function conss(x, p)
     return SVector{3}(-x[1] + 2 * x[2] - 1, +x[1] - 2 * x[2] + 1, (x[1]^2) / 4 + x[2]^2 - 1)
 end
 
-opt_f = OptimizationFunction(objective, cons = conss)
+# Use out-of-place form {false} since SVector is immutable
+opt_f = OptimizationFunction{false}(objective, cons = conss)
 
 x0 = @SVector [1.0f0, 1.0f0]
 lb = @SVector [0.0f0, 0.0f0]

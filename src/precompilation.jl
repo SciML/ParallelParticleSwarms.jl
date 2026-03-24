@@ -21,7 +21,9 @@ using PrecompileTools
         p = @SArray Float32[1.0, 100.0]
 
         # Create optimization problem with StaticArrays
-        prob = OptimizationProblem(_rosenbrock_precompile, x0, p; lb = lb, ub = ub)
+        # Use out-of-place form {false} since SVector is immutable
+        opt_f = OptimizationFunction{false}(_rosenbrock_precompile)
+        prob = OptimizationProblem(opt_f, x0, p; lb = lb, ub = ub)
 
         # Precompile SerialPSO - most commonly used CPU algorithm
         sol = solve(prob, SerialPSO(10), maxiters = 2)
