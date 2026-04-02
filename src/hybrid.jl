@@ -6,21 +6,21 @@ using Optimization
 # Clamp x to interior of bounds and evaluate objective
 @inline function _safe_eval(f, p, x, lb, ub)
     T = eltype(x)
-    ε = T(1e-6)
+    ε = T(1.0e-6)
     xc = clamp.(x, lb .+ ε, ub .- ε)
     xc = map(xi -> abs(xi) < ε ? ε : xi, xc)
     v = f(xc, p)
-    ifelse(isfinite(v), v, T(Inf))
+    return ifelse(isfinite(v), v, T(Inf))
 end
 
 # Clamp x to interior of bounds and evaluate gradient
 @inline function _safe_grad(grad_f, p, x, lb, ub)
     T = eltype(x)
-    ε = T(1e-6)
+    ε = T(1.0e-6)
     xc = clamp.(x, lb .+ ε, ub .- ε)
     xc = map(xi -> abs(xi) < ε ? ε : xi, xc)
     g = grad_f(xc, p)
-    map(gi -> ifelse(isfinite(gi), gi, zero(gi)), g)
+    return map(gi -> ifelse(isfinite(gi), gi, zero(gi)), g)
 end
 
 # Cubic interpolation for line search; falls back to bisection if non-convex
@@ -29,7 +29,7 @@ end
     desc = d1 * d1 - dϕ_lo * dϕ_hi
     # Use max to ensure non-negative argument to sqrt (avoids DomainError with ForwardDiff)
     d2 = sqrt(max(desc, zero(desc)))
-    ifelse(desc < 0, (a_lo + a_hi) / 2, a_hi - (a_hi - a_lo) * ((dϕ_hi + d2 - d1) / (dϕ_hi - dϕ_lo + 2 * d2)))
+    return ifelse(desc < 0, (a_lo + a_hi) / 2, a_hi - (a_hi - a_lo) * ((dϕ_hi + d2 - d1) / (dϕ_hi - dϕ_lo + 2 * d2)))
 end
 
 # Zoom phase of Strong Wolfe line search (Nocedal & Wright Algorithm 3.6)
@@ -39,10 +39,12 @@ end
     done = false
     for _ in 1:10
         if !done
-            a_j = _interpolate(a_lo, a_hi, ϕ_lo, _safe_eval(f, p, clamp.(x + a_hi * dir, lb, ub), lb, ub),
+            a_j = _interpolate(
+                a_lo, a_hi, ϕ_lo, _safe_eval(f, p, clamp.(x + a_hi * dir, lb, ub), lb, ub),
                 dot(_safe_grad(grad_f, p, clamp.(x + a_lo * dir, lb, ub), lb, ub), dir),
-                dot(_safe_grad(grad_f, p, clamp.(x + a_hi * dir, lb, ub), lb, ub), dir))
-            a_j = clamp(a_j, min(a_lo, a_hi) + T(1e-3), max(a_lo, a_hi) - T(1e-3))
+                dot(_safe_grad(grad_f, p, clamp.(x + a_hi * dir, lb, ub), lb, ub), dir)
+            )
+            a_j = clamp(a_j, min(a_lo, a_hi) + T(1.0e-3), max(a_lo, a_hi) - T(1.0e-3))
             xn_j = clamp.(x + a_j * dir, lb, ub)
             ϕ_j = _safe_eval(f, p, xn_j, lb, ub)
             if (ϕ_j > ϕ_0 + c1 * a_j * dϕ_0) || (ϕ_j >= ϕ_lo)
@@ -53,7 +55,9 @@ end
                 if abs(dϕ_j) <= -c2 * dϕ_0
                     xn_out, ϕ_out, gn_out, ok_out, done = xn_j, ϕ_j, gn_j, true, true
                 else
-                    if dϕ_j * (a_hi - a_lo) >= zero(T); a_hi = a_lo; end
+                    if dϕ_j * (a_hi - a_lo) >= zero(T)
+                        a_hi = a_lo
+                    end
                     a_lo, ϕ_lo = a_j, ϕ_j
                 end
             end
@@ -63,13 +67,13 @@ end
         xn_lo = clamp.(x + a_lo * dir, lb, ub)
         xn_out, ϕ_out, gn_out = xn_lo, _safe_eval(f, p, xn_lo, lb, ub), _safe_grad(grad_f, p, xn_lo, lb, ub)
     end
-    (xn_out, ϕ_out, gn_out, ok_out)
+    return (xn_out, ϕ_out, gn_out, ok_out)
 end
 
 # Strong Wolfe line search (Nocedal & Wright Algorithm 3.5)
 @inline function _strong_wolfe(f, grad_f, p, x, fx, g, dir, lb, ub)
     T = eltype(x)
-    c1, c2 = T(1e-4), T(0.9)
+    c1, c2 = T(1.0e-4), T(0.9)
     dϕ_0 = dot(g, dir)
     xn_out, ϕ_out, gn_out, ok_out = x, fx, g, false
     if dϕ_0 < zero(T)  # valid descent direction
@@ -98,7 +102,7 @@ end
             xn_out, ϕ_out, gn_out, ok_out = xn, _safe_eval(f, p, xn, lb, ub), _safe_grad(grad_f, p, xn, lb, ub), true
         end
     end
-    (xn_out, ϕ_out, gn_out, ok_out)
+    return (xn_out, ϕ_out, gn_out, ok_out)
 end
 
 # L-BFGS two-loop recursion (Nocedal & Wright Algorithm 7.4)
@@ -106,7 +110,7 @@ end
     T = eltype(g)
     q, a = g, ntuple(_ -> zero(T), Val(M))
     # First loop: newest to oldest
-    for j in 0:M-1
+    for j in 0:(M - 1)
         idx = k - j
         if idx >= 1
             ii = mod1(idx, M)
@@ -117,18 +121,18 @@ end
     # Compute scaling factor γ
     kk = mod1(k, M)
     yy = sum(abs2, Y[kk])
-    γ = ifelse(k >= 1 && yy > T(1e-30), dot(S[kk], Y[kk]) / yy, one(T))
+    γ = ifelse(k >= 1 && yy > T(1.0e-30), dot(S[kk], Y[kk]) / yy, one(T))
     γ = ifelse(isfinite(γ) && γ > zero(T), γ, one(T))
     r = γ * q
     # Second loop: oldest to newest
-    for j in M-1:-1:0
+    for j in (M - 1):-1:0
         idx = k - j
         if idx >= 1
             ii = mod1(idx, M)
             r = r + (a[ii] - Rho[ii] * dot(Y[ii], r)) * S[ii]
         end
     end
-    -r
+    return -r
 end
 
 # Run L-BFGS independently on each starting point
@@ -144,18 +148,22 @@ end
     g = _safe_grad(grad_f, p, x, lb, ub)
     k, active = 0, isfinite(fx) && all(isfinite, g)
     for _ in 1:maxiters
-        if active && norm(g) >= T(1e-7)
+        if active && norm(g) >= T(1.0e-7)
             dir = _lbfgs_dir(g, S, Y, Rho, Val(M), k)
             # Reset to steepest descent if direction is not descent
-            if dot(g, dir) >= zero(T); dir, k = -g, 0; end
+            if dot(g, dir) >= zero(T)
+                dir, k = -g, 0
+            end
             xn, fn, gn, ok = _strong_wolfe(f, grad_f, p, x, fx, g, dir, lb, ub)
             # Fall back to steepest descent if line search fails
-            if !ok; xn, fn, gn, ok = _strong_wolfe(f, grad_f, p, x, fx, g, -g, lb, ub); k = 0; end
+            if !ok
+                xn, fn, gn, ok = _strong_wolfe(f, grad_f, p, x, fx, g, -g, lb, ub); k = 0
+            end
             if ok && isfinite(fn) && all(isfinite, gn)
                 s, y = xn - x, gn - g
                 sy = dot(s, y)
                 # Update history only if curvature condition holds
-                if isfinite(one(T) / sy) && sy > T(1e-10)
+                if isfinite(one(T) / sy) && sy > T(1.0e-10)
                     k += 1; ii = mod1(k, M)
                     S, Y, Rho = Base.setindex(S, s, ii), Base.setindex(Y, y, ii), Base.setindex(Rho, one(T) / sy, ii)
                 else
@@ -208,7 +216,7 @@ function SciMLBase.solve!(
     kernel(f_raw, grad_f, p, x0s, result, result_fx, lb, ub, local_maxiters, m_val; ndrange = n)
     KernelAbstractions.synchronize(opt.backend)
 
-    # Find best result 
+    # Find best result
     minobj, ind = findmin(result_fx)
 
     # Single bulk transfer for winning solution only
@@ -219,7 +227,7 @@ function SciMLBase.solve!(
 
     solve_time = (time() - t0) + sol_pso.stats.time
 
-    SciMLBase.build_solution(
+    return SciMLBase.build_solution(
         SciMLBase.DefaultOptimizationCache(prob.f, prob.p), opt, best_u, best_obj;
         stats = Optimization.OptimizationStats(; time = solve_time)
     )
