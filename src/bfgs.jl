@@ -5,20 +5,21 @@ function SciMLBase.__solve(
         abstol = nothing,
         reltol = nothing,
         maxiters = 1000,
+        linesearch = StrongWolfeLineSearch(),
         kwargs...
     )
-    f = Base.Fix2(prob.f.f, prob.p)
-    function _g(θ, _p = nothing)
-        return ForwardDiff.gradient(f, θ)
-    end
+    u0 = as_svector(prob.u0)
+    ∇f = as_svector_grad(instantiate_gradient(prob.f.f, prob.f.adtype))
     t0 = time()
-    nlprob = NonlinearProblem{false}(_g, prob.u0)
+    nlprob = ImmutableNonlinearProblem{false}(∇f, u0, prob.p)
     nlsol = solve(
         nlprob,
-        SimpleLimitedMemoryBroyden(; threshold = opt.threshold, linesearch = Val(true));
+        SimpleLimitedMemoryBroyden(; threshold = opt.threshold, linesearch);
         maxiters,
         abstol,
-        reltol
+        reltol,
+        grad_f = ∇f,
+        kwargs...
     )
     θ = nlsol.u
     t1 = time()
@@ -31,6 +32,7 @@ function SciMLBase.__solve(
     )
 end
 
+# `BFGS` here solves ∇f = 0 via `SimpleBroyden` (secant/quasi-Newton on the gradient).
 function SciMLBase.__solve(
         prob::SciMLBase.OptimizationProblem,
         opt::BFGS,
@@ -38,19 +40,22 @@ function SciMLBase.__solve(
         abstol = nothing,
         reltol = nothing,
         maxiters = 1000,
+        linesearch = StrongWolfeLineSearch(),
         kwargs...
     )
-    f = Base.Fix2(prob.f.f, prob.p)
-    ∇f = instantiate_gradient(f, prob.f.adtype)
+    u0 = as_svector(prob.u0)
+    ∇f = as_svector_grad(instantiate_gradient(prob.f.f, prob.f.adtype))
 
     t0 = time()
-    nlprob = NonlinearProblem{false}(∇f, prob.u0)
+    nlprob = ImmutableNonlinearProblem{false}(∇f, u0, prob.p)
     nlsol = solve(
         nlprob,
-        SimpleBroyden(; linesearch = Val(true));
+        SimpleBroyden(; linesearch);
         maxiters,
         abstol,
-        reltol
+        reltol,
+        grad_f = ∇f,
+        kwargs...
     )
     θ = nlsol.u
     t1 = time()
