@@ -1,6 +1,6 @@
 name = "ParallelParticleSwarms"
 uuid = "ab63da0c-63b4-40fa-a3b7-d2cba5be6419"
-version = "1.0.0"
+version = "1.1.0"
 authors = ["Utkarsh <rajpututkarsh530@gmail.com> and contributors"]
 
 [deps]
@@ -31,7 +31,7 @@ PrecompileTools = "1"
 QuasiMonteCarlo = "0.3"
 Reexport = "1.2"
 SafeTestsets = "0.1"
-SciMLBase = "2.79"
+SciMLBase = "2.79, 3"
 Setfield = "1.1"
 SimpleNonlinearSolve = "2.2"
 StaticArrays = "1.9"
