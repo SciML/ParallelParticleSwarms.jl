@@ -384,7 +384,7 @@ using Statistics
 #     label = "ParallelSyncPSOKernel: GPU",
 #     ylabel = "Time (s)",
 #     xlabel = "No. of Particles",
-#     title = "Bechmarking the 10D Rosenbrock Problem",
+#     title = "Benchmarking the 10D Rosenbrock Problem",
 #     legend = :topleft,
 #     xticks = xticks,
 #     yticks = yticks,
