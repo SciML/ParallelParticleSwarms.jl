@@ -7,7 +7,7 @@ global CI_GROUP = get(ENV, "GROUP", "CPU")
 @safetestset "Reinitialization tests" include("./reinit.jl")
 @safetestset "JET static analysis" include("./jet.jl")
 
-#TODO: Curent throws warning for redefinition with the use of @testset multiple times. Migrate to TestItemRunners.jl
+#TODO: Current throws warning for redefinition with the use of @testset multiple times. Migrate to TestItemRunners.jl
 @testset for BACKEND in unique(("CPU", CI_GROUP))
     global GROUP = BACKEND
     @testset "$(BACKEND) optimizers tests" include("./gpu.jl")
