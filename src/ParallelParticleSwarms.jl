@@ -1,10 +1,11 @@
 module ParallelParticleSwarms
 
 using SciMLBase, StaticArrays, Setfield, KernelAbstractions
-using QuasiMonteCarlo, Optimization, SimpleNonlinearSolve, ForwardDiff
+using QuasiMonteCarlo, Optimization, SimpleNonlinearSolve, ForwardDiff, LineSearch
+using NonlinearSolveBase: ImmutableNonlinearProblem
 import Adapt
 import Adapt: adapt
-import Enzyme: autodiff_deferred, Active, Reverse, Const
+import Enzyme: autodiff, autodiff_deferred, Active, Reverse, Const, Duplicated, make_zero!
 import KernelAbstractions: @atomic, @atomicreplace, @atomicswap
 using QuasiMonteCarlo
 import DiffEqGPU: GPUTsit5, make_prob_compatible, vectorized_solve, vectorized_asolve
