@@ -1,4 +1,6 @@
 using Pkg
+using SafeTestsets
+using Test
 
 const TEST_GROUP = get(ENV, "PPS_TEST_GROUP", "Core")
 
@@ -8,9 +10,6 @@ if TEST_GROUP == "QA"
     Pkg.instantiate()
     include("qa.jl")
 else
-    using SafeTestsets
-    using Test
-
     global CI_GROUP = get(ENV, "GROUP", "CPU")
 
     @safetestset "Regression tests" include("./regression.jl")
