@@ -1,6 +1,7 @@
 [deps]
 JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
 ParallelParticleSwarms = "ab63da0c-63b4-40fa-a3b7-d2cba5be6419"
+SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
@@ -9,5 +10,6 @@ ParallelParticleSwarms = {path = "../.."}
 
 [compat]
 JET = "0.9, 0.10, 0.11"
+SafeTestsets = "0.1"
 StaticArrays = "1.9"
 julia = "1.10"
