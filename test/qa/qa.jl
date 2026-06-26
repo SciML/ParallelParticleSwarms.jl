@@ -19,9 +19,9 @@ run_qa(
     ei_kwargs = (;
         all_explicit_imports_are_public = (;
             ignore = (
-                Symbol("@atomic"),          # KernelAbstractions (re-exports Atomix)
-                Symbol("@atomicreplace"),   # KernelAbstractions (re-exports Atomix)
-                :ImmutableNonlinearProblem, # SciMLBase type re-exported by NonlinearSolveBase
+                Symbol("@atomic"),          # KernelAbstractions (re-exports Atomix), still non-public
+                Symbol("@atomicreplace"),   # KernelAbstractions (re-exports Atomix), still non-public
+                :ImmutableNonlinearProblem, # SciMLBase type re-exported by NonlinearSolveBase, still non-public there
                 :vectorized_solve,          # DiffEqGPU internal
                 :vectorized_asolve,         # DiffEqGPU internal
             ),
@@ -38,13 +38,11 @@ run_qa(
         ),
         all_qualified_accesses_are_public = (;
             ignore = (
-                :AbstractODEProblem,       # SciMLBase internal
                 :DefaultOptimizationCache, # SciMLBase internal
                 :OptimizationStats,        # Optimization internal (owner SciMLBase)
                 :__solve,                  # SciMLBase internal
                 :allowsbounds,             # SciMLBase internal
                 :allowsconstraints,        # SciMLBase internal
-                :build_solution,           # SciMLBase internal
                 :evaluate_f,               # NonlinearSolveBase.Utils internal
                 :evaluate_f!!,             # NonlinearSolveBase.Utils internal
                 :gradient,                 # ForwardDiff internal
