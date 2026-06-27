@@ -41,8 +41,6 @@ run_qa(
                 :DefaultOptimizationCache, # SciMLBase internal
                 :OptimizationStats,        # Optimization internal (owner SciMLBase)
                 :__solve,                  # SciMLBase internal
-                :allowsbounds,             # SciMLBase internal
-                :allowsconstraints,        # SciMLBase internal
                 :evaluate_f,               # NonlinearSolveBase.Utils internal
                 :evaluate_f!!,             # NonlinearSolveBase.Utils internal
                 :gradient,                 # ForwardDiff internal
