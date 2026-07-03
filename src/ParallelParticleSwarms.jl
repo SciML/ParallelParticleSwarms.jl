@@ -5,10 +5,9 @@ using QuasiMonteCarlo, Optimization, SimpleNonlinearSolve, ForwardDiff, LineSear
 using NonlinearSolveBase: ImmutableNonlinearProblem
 import Adapt
 import Adapt: adapt
-import Enzyme: autodiff, autodiff_deferred, Active, Reverse, Const, Duplicated, make_zero!
-import KernelAbstractions: @atomic, @atomicreplace, @atomicswap
-using QuasiMonteCarlo
-import DiffEqGPU: GPUTsit5, make_prob_compatible, vectorized_solve, vectorized_asolve
+import Enzyme: autodiff, Active, Reverse, Const, Duplicated, make_zero!
+import KernelAbstractions: @atomic, @atomicreplace
+import DiffEqGPU: GPUTsit5, vectorized_solve, vectorized_asolve
 
 using Reexport
 @reexport using SciMLBase
