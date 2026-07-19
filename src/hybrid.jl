@@ -68,10 +68,14 @@ function SciMLBase.solve!(
         maxiters = 100,
         local_maxiters = 50,
         linesearch = StrongWolfeLineSearch(),
+        w = 0.7298f0,
+        wdamp = 1.0f0,
+        c1 = 1.4962f0,
+        c2 = 1.4962f0,
         kwargs...
     ) where {Backend, LocalOpt <: Union{LBFGS, BFGS}}
 
-    sol_pso = SciMLBase.solve!(cache.pso_cache; maxiters)
+    sol_pso = SciMLBase.solve!(cache.pso_cache; maxiters, w, wdamp, c1, c2)
     best_u = sol_pso.u
     best_obj = _unwrap_scalar(sol_pso.objective)
 

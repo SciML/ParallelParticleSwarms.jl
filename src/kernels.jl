@@ -38,8 +38,7 @@ end
 @kernel function update_particle_states!(
         prob,
         gpu_particles::AbstractArray{SPSOParticle{T1, T2}}, gbest_ref, w,
-        opt::ParallelPSOKernel, lock::AbstractArray{UInt32}; c1 = 1.4962f0,
-        c2 = 1.4962f0
+        c1, c2, opt::ParallelPSOKernel, lock::AbstractArray{UInt32}
     ) where {T1, T2}
     i = @index(Global, Linear)
     tidx = @index(Local, Linear)
@@ -127,8 +126,7 @@ end
 @kernel function update_particle_states!(
         prob,
         gpu_particles::AbstractArray{SPSOParticle{T1, T2}}, block_particles, gbest, w,
-        opt::ParallelSyncPSOKernel; c1 = 1.4962f0,
-        c2 = 1.4962f0
+        c1, c2, opt::ParallelSyncPSOKernel
     ) where {T1, T2}
     i = @index(Global, Linear)
     tidx = @index(Local, Linear)
@@ -181,8 +179,7 @@ end
 # https://github.com/JuliaGPU/KernelAbstractions.jl/issues/330
 @kernel function update_particle_states!(
         prob, gpu_particles, gbest, w,
-        opt::ParallelSyncPSOKernel{Backend, T, G, H}; c1 = 1.4962f0,
-        c2 = 1.4962f0
+        c1, c2, opt::ParallelSyncPSOKernel{Backend, T, G, H}
     ) where {Backend <: CPU, T, G, H}
     i = @index(Global, Linear)
 
@@ -197,9 +194,7 @@ end
         prob,
         gpu_particles,
         gbest_ref,
-        w, wdamp, maxiters, opt;
-        c1 = 1.4962f0,
-        c2 = 1.4962f0
+        w, wdamp, c1, c2, maxiters, opt
     )
     i = @index(Global, Linear)
 

@@ -5,6 +5,8 @@ function vectorized_solve!(
         maxiters = 100,
         w = 0.7298f0,
         wdamp = 1.0f0,
+        c1 = 1.4962f0,
+        c2 = 1.4962f0,
         debug = false
     )
     backend = get_backend(gpu_particles)
@@ -25,7 +27,7 @@ function vectorized_solve!(
             prob,
             gpu_particles, block_particles,
             gbest,
-            w, opt;
+            w, c1, c2, opt;
             ndrange = padded_ndrange
         )
         gbest = minimum(block_particles)
@@ -42,6 +44,8 @@ function vectorized_solve!(
         maxiters = 100,
         w = 0.7298f0,
         wdamp = 1.0f0,
+        c1 = 1.4962f0,
+        c2 = 1.4962f0,
         debug = false
     ) where {Backend <: CPU, T, G, H}
     backend = get_backend(gpu_particles)
@@ -53,7 +57,7 @@ function vectorized_solve!(
             prob,
             gpu_particles,
             gbest,
-            w, opt;
+            w, c1, c2, opt;
             ndrange = length(gpu_particles)
         )
         best_particle = minimum(gpu_particles)
@@ -71,6 +75,8 @@ function vectorized_solve!(
         maxiters = 100,
         w = 0.7298f0,
         wdamp = 1.0f0,
+        c1 = 1.4962f0,
+        c2 = 1.4962f0,
         debug = false
     )
 
@@ -85,7 +91,10 @@ function vectorized_solve!(
     fill!(lock, UInt32(0))
     for i in 1:maxiters
         ## Invoke GPU Kernel here
-        kernel(prob, gpu_particles, gbest, w, opt, lock; ndrange = padded_ndrange)
+        kernel(
+            prob, gpu_particles, gbest, w, c1, c2, opt, lock;
+            ndrange = padded_ndrange
+        )
         w = w * wdamp
     end
 
@@ -99,6 +108,8 @@ function vectorized_solve!(
         maxiters = 100,
         w = 0.7298f0,
         wdamp = 1.0f0,
+        c1 = 1.4962f0,
+        c2 = 1.4962f0,
         debug = false
     )
     backend = get_backend(gpu_particles)
@@ -111,6 +122,8 @@ function vectorized_solve!(
         gbest,
         w,
         wdamp,
+        c1,
+        c2,
         maxiters,
         opt;
         ndrange = padded_ndrange
@@ -209,11 +222,13 @@ function vectorized_solve!(
         maxiters = 100,
         w = 0.7298f0,
         wdamp = 1.0f0,
+        c1 = 1.4962f0,
+        c2 = 1.4962f0,
         debug = false
     )
     sol_ref = Ref(gbest)
     for i in 1:maxiters
-        update_particle_states_cpu!(prob, particles, sol_ref, w, i, opt)
+        update_particle_states_cpu!(prob, particles, sol_ref, w, i, opt; c1, c2)
         w = w * wdamp
     end
     return sol_ref[], particles
