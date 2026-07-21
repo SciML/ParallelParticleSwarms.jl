@@ -3,6 +3,10 @@ using JET
 
 run_qa(
     ParallelParticleSwarms;
+    api_docs_kwargs = (;
+        rendered = true,
+        rendered_ignore = Tuple(names(ParallelParticleSwarms.SciMLBase)),
+    ),
     explicit_imports = true,
     # `NonlinearFunction` (SciMLBase) and `ImmutableNonlinearProblem`
     # (NonlinearSolveBase re-export of a SciMLBase type) are deliberately
