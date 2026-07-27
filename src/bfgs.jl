@@ -1,4 +1,4 @@
-function SciMLBase.__solve(
+function SciMLBase.solve(
         prob::SciMLBase.OptimizationProblem,
         opt::LBFGS,
         args...;
@@ -25,15 +25,14 @@ function SciMLBase.__solve(
     t1 = time()
 
     return SciMLBase.build_solution(
-        SciMLBase.DefaultOptimizationCache(prob.f, prob.p),
-        opt,
+        _optimization_cache(prob), opt,
         θ,
         prob.f(θ, prob.p)
     )
 end
 
 # `BFGS` here solves ∇f = 0 via `SimpleBroyden` (secant/quasi-Newton on the gradient).
-function SciMLBase.__solve(
+function SciMLBase.solve(
         prob::SciMLBase.OptimizationProblem,
         opt::BFGS,
         args...;
@@ -61,8 +60,7 @@ function SciMLBase.__solve(
     t1 = time()
 
     return SciMLBase.build_solution(
-        SciMLBase.DefaultOptimizationCache(prob.f, prob.p),
-        opt,
+        _optimization_cache(prob), opt,
         θ,
         prob.f(θ, prob.p)
     )

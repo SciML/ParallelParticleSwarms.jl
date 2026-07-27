@@ -12,11 +12,22 @@ function uniform(dim::Int, lb::AbstractArray{T}, ub::AbstractArray{T}) where {T}
     return arr
 end
 
-function _gen_sampling_kernel(prob, num_particles::Int, sampling::QuasiMonteCarlo.SamplingAlgorithm)
+function _sample_positions(num_particles::Int, lb, ub, ::SamplingAlgorithm)
+    T = promote_type(eltype(lb), eltype(ub))
+    positions = Matrix{T}(undef, length(lb), num_particles)
+    for i in axes(positions, 2), j in axes(positions, 1)
+        @inbounds positions[j, i] = lb[j] + rand(T) * (ub[j] - lb[j])
+    end
+    return positions
+end
+
+@inline _static_collect(::Type{T}, itr) where {T <: SArray} = T(Tuple(itr))
+
+function _gen_sampling_kernel(prob, num_particles::Int, sampling::SamplingAlgorithm)
     lb = prob.lb
     ub = prob.ub
 
-    positions = QuasiMonteCarlo.sample(num_particles, lb, ub, sampling)
+    positions = _sample_positions(num_particles, lb, ub, sampling)
     return positions
 end
 
@@ -29,7 +40,7 @@ end
     cost_func = prob.f
     p = prob.p
 
-    position = StaticArrays.sacollect(
+    position = _static_collect(
         T,
         ifelse(
                 abs(prob.u0[i]) > 0,
@@ -65,7 +76,7 @@ end
     cost_func = prob.f
     p = prob.p
 
-    position = StaticArrays.sacollect(T, uniform_itr(dim, lb, ub))
+    position = _static_collect(T, uniform_itr(dim, lb, ub))
 
     velocity = zero(T)
 
@@ -86,14 +97,14 @@ end
 @kernel function gpu_init_particles!(
         particles, qmc_particles, prob, opt, ::Type{T},
         ::Type{T1}
-    ) where {T <: SArray, T1 <: QuasiMonteCarlo.SamplingAlgorithm}
+    ) where {T <: SArray, T1 <: SamplingAlgorithm}
     i = @index(Global, Linear)
 
     dim = length(prob.u0)
     cost_func = prob.f
     p = prob.p
 
-    @inbounds position = StaticArrays.sacollect(T, qmc_particles[j, i] for j in 1:dim)
+    @inbounds position = _static_collect(T, (qmc_particles[j, i] for j in 1:dim))
     velocity = zero(T)
 
     if !isnothing(prob.f.cons)
@@ -120,7 +131,7 @@ function init_particles!(particles, prob, opt, ::Type{T}) where {T <: SArray}
     num_particles = opt.num_particles
 
     if lb === nothing || (all(isinf, lb) && all(isinf, ub))
-        gbest_position = StaticArrays.sacollect(
+        gbest_position = _static_collect(
             T,
             ifelse(
                     abs(prob.u0[i]) > 0, prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i]),
@@ -128,7 +139,7 @@ function init_particles!(particles, prob, opt, ::Type{T}) where {T <: SArray}
                 ) for i in 1:dim
         )
     else
-        gbest_position = StaticArrays.sacollect(T, uniform_itr(dim, lb, ub))
+        gbest_position = _static_collect(T, uniform_itr(dim, lb, ub))
     end
 
     gbest_position = convert(T, gbest_position)
@@ -143,12 +154,12 @@ function init_particles!(particles, prob, opt, ::Type{T}) where {T <: SArray}
     # particles = SPSOParticle[]
 
     if !(lb === nothing || (all(isinf, lb) && all(isinf, ub)))
-        positions = QuasiMonteCarlo.sample(num_particles, lb, ub, LatinHypercubeSample())
+        positions = _sample_positions(num_particles, lb, ub, LatinHypercubeSample())
     end
 
     for i in 1:num_particles
         if lb === nothing || (all(isinf, lb) && all(isinf, ub))
-            position = StaticArrays.sacollect(
+            position = _static_collect(
                 T,
                 ifelse(
                         abs(prob.u0[i]) > 0,
@@ -157,7 +168,7 @@ function init_particles!(particles, prob, opt, ::Type{T}) where {T <: SArray}
                     ) for i in 1:dim
             )
         else
-            @inbounds position = StaticArrays.sacollect(T, positions[j, i] for j in 1:dim)
+            @inbounds position = _static_collect(T, (positions[j, i] for j in 1:dim))
         end
 
         velocity = zero(T)
@@ -195,7 +206,7 @@ function init_particles(prob, opt, ::Type{T}) where {T <: SArray}
     unbounded = lb === nothing || (all(isinf, lb) && all(isinf, ub))
 
     if unbounded
-        gbest_position = StaticArrays.sacollect(
+        gbest_position = _static_collect(
             T,
             ifelse(
                     abs(prob.u0[i]) > 0, prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i]),
@@ -203,7 +214,7 @@ function init_particles(prob, opt, ::Type{T}) where {T <: SArray}
                 ) for i in 1:dim
         )
     else
-        gbest_position = StaticArrays.sacollect(T, uniform_itr(dim, lb, ub))
+        gbest_position = _static_collect(T, uniform_itr(dim, lb, ub))
     end
 
     gbest_cost = cost_func(gbest_position, p)
@@ -215,11 +226,11 @@ function init_particles(prob, opt, ::Type{T}) where {T <: SArray}
     end
     particles = SPSOParticle{T, eltype(T)}[]
 
-    positions = unbounded ? nothing : QuasiMonteCarlo.sample(num_particles, lb, ub, LatinHypercubeSample())
+    positions = unbounded ? nothing : _sample_positions(num_particles, lb, ub, LatinHypercubeSample())
 
     for i in 1:num_particles
         if unbounded
-            @inbounds position = StaticArrays.sacollect(
+            @inbounds position = _static_collect(
                 T,
                 ifelse(
                         abs(prob.u0[j]) > 0,
@@ -228,7 +239,7 @@ function init_particles(prob, opt, ::Type{T}) where {T <: SArray}
                     ) for j in 1:dim
             )
         else
-            @inbounds position = StaticArrays.sacollect(T, positions[j, i] for j in 1:dim)
+            @inbounds position = _static_collect(T, (positions[j, i] for j in 1:dim))
         end
         velocity = zero(T)
 
@@ -278,7 +289,7 @@ function init_particles(prob, opt, ::Type{T}) where {T <: AbstractArray}
 
     particles = MPSOParticle[]
 
-    positions = unbounded ? nothing : QuasiMonteCarlo.sample(num_particles, lb, ub, LatinHypercubeSample())
+    positions = unbounded ? nothing : _sample_positions(num_particles, lb, ub, LatinHypercubeSample())
 
     for i in 1:num_particles
         if unbounded
@@ -380,7 +391,16 @@ struct ForwardDiffGradient{F}
     f::F
 end
 @inline function (g::ForwardDiffGradient)(θ, p)
-    return ForwardDiff.gradient(x -> g.f(x, p), θ)
+    return _finite_difference_gradient(g.f, θ, p)
+end
+
+function _finite_difference_gradient(f, θ, p)
+    h = sqrt(eps(eltype(θ)))
+    return map(eachindex(θ)) do i
+        δ = MVector{length(θ), eltype(θ)}(θ)
+        δ[i] += h
+        (f(δ, p) - f(θ, p)) / h
+    end
 end
 
 struct EnzymeGradient{F}

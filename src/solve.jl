@@ -12,7 +12,6 @@ function SciMLBase.solve!(
         cache::PSOCache, opt::ParallelPSOKernel, args...; maxiters = 100, kwargs...
     )
     prob = cache.prob
-    t0 = time()
     gbest,
         particles = vectorized_solve!(
         cache.prob,
@@ -23,13 +22,11 @@ function SciMLBase.solve!(
         args...;
         maxiters, kwargs...
     )
-    t1 = time()
 
     particles_positions = get_pos.(particles)
     return SciMLBase.build_solution(
-        SciMLBase.DefaultOptimizationCache(prob.f, prob.p), opt,
-        gbest.position, prob.f(gbest.position, prob.p), original = particles_positions,
-        stats = Optimization.OptimizationStats(; time = t1 - t0)
+        _optimization_cache(prob), opt, gbest.position, prob.f(gbest.position, prob.p),
+        original = particles_positions
     )
 end
 
@@ -37,7 +34,6 @@ function SciMLBase.solve!(
         cache::PSOCache, opt::ParallelSyncPSOKernel, args...; maxiters = 100, kwargs...
     )
     prob = cache.prob
-    t0 = time()
     gbest,
         particles = vectorized_solve!(
         prob,
@@ -48,13 +44,11 @@ function SciMLBase.solve!(
         maxiters,
         kwargs...
     )
-    t1 = time()
 
     particles_positions = get_pos.(particles)
     return SciMLBase.build_solution(
-        SciMLBase.DefaultOptimizationCache(prob.f, prob.p), opt,
-        gbest.position, prob.f(gbest.position, prob.p), original = particles_positions,
-        stats = Optimization.OptimizationStats(; time = t1 - t0)
+        _optimization_cache(prob), opt, gbest.position, prob.f(gbest.position, prob.p),
+        original = particles_positions
     )
 end
 
@@ -66,7 +60,7 @@ function SciMLBase.solve(
     return solve!(init(prob, opt, args...; kwargs...), opt, args...; maxiters, kwargs...)
 end
 
-function SciMLBase.__solve(
+function SciMLBase.solve(
         prob::OptimizationProblem,
         opt::PSOAlgorithm,
         args...;
@@ -77,12 +71,11 @@ function SciMLBase.__solve(
     lb, ub = check_init_bounds(prob)
     prob = remake(prob; lb = lb, ub = ub)
 
-    gbest, particles, solve_time = pso_solve(prob, opt, args...; maxiters, kwargs...)
+    gbest, particles, _ = pso_solve(prob, opt, args...; maxiters, kwargs...)
     particles_positions = get_pos.(particles)
     return SciMLBase.build_solution(
-        SciMLBase.DefaultOptimizationCache(prob.f, prob.p), opt,
-        gbest.position, prob.f(gbest.position, prob.p), original = particles_positions,
-        stats = Optimization.OptimizationStats(; time = solve_time)
+        _optimization_cache(prob), opt, gbest.position, prob.f(gbest.position, prob.p),
+        original = particles_positions
     )
 end
 

@@ -44,6 +44,11 @@ function default_prob_func(prob, gpu_particle)
     return remake(prob, p = gpu_particle.position)
 end
 
+function _solve_ode_batch(probs, ode_alg; kwargs...)
+    solutions = map(prob -> SciMLBase.solve(prob, ode_alg; kwargs...), probs)
+    return nothing, getproperty.(solutions, :u)
+end
+
 @inline function _reduce_losses!(losses, gpu_data, us)
     loss_mat = map(x -> sum(x .^ 2), gpu_data .- us)
     loss_view = ndims(losses) == 1 ? reshape(losses, 1, :) : losses
@@ -84,11 +89,7 @@ function parameter_estim_ode!(
 
         KernelAbstractions.synchronize(backend)
 
-        ts, us = vectorized_asolve(
-            probs,
-            prob,
-            ode_alg; kwargs...
-        )
+        _, us = _solve_ode_batch(probs, ode_alg; kwargs...)
 
         KernelAbstractions.synchronize(backend)
 
@@ -143,11 +144,7 @@ function parameter_estim_ode!(
 
         KernelAbstractions.synchronize(backend)
 
-        ts, us = vectorized_solve(
-            probs,
-            prob,
-            ode_alg; kwargs...
-        )
+        _, us = _solve_ode_batch(probs, ode_alg; kwargs...)
 
         KernelAbstractions.synchronize(backend)
 

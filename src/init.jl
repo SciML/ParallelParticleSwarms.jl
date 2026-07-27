@@ -16,10 +16,10 @@ function __init!(
         particles, prob::OptimizationProblem,
         opt::Union{ParallelPSOKernel, ParallelSyncPSOKernel}, sampler::T,
         args...; kwargs...
-    ) where {T <: QuasiMonteCarlo.SamplingAlgorithm}
+    ) where {T <: SamplingAlgorithm}
     backend = opt.backend
 
-    qmc_samples = QuasiMonteCarlo.sample(opt.num_particles, prob.lb, prob.ub, sampler)
+    qmc_samples = _sample_positions(opt.num_particles, prob.lb, prob.ub, sampler)
 
     qmc_samples = adapt(backend, qmc_samples)
 

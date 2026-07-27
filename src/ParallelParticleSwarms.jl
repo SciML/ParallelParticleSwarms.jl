@@ -1,16 +1,23 @@
 module ParallelParticleSwarms
 
-using SciMLBase, StaticArrays, Setfield, KernelAbstractions
-using QuasiMonteCarlo, Optimization, SimpleNonlinearSolve, ForwardDiff, LineSearch
-using NonlinearSolveBase: ImmutableNonlinearProblem
 import Adapt
 import Adapt: adapt
+import ADTypes: AutoEnzyme, AutoForwardDiff
+import Atomix: @atomic, @atomicreplace
 import Enzyme: autodiff, Active, Reverse, Const, Duplicated, make_zero!
-import KernelAbstractions: @atomic, @atomicreplace
-import DiffEqGPU: GPUTsit5, vectorized_solve, vectorized_asolve
-
-using Reexport
-@reexport using SciMLBase
+import DiffEqGPU: GPUTsit5
+import KernelAbstractions
+import KernelAbstractions: CPU, @groupsize, @index, @kernel, @localmem, @private,
+    @synchronize, @uniform, get_backend
+import LineSearch: StrongWolfeLineSearch
+import PrecompileTools: @compile_workload, @setup_workload
+import QuasiMonteCarlo: LatinHypercubeSample, SamplingAlgorithm
+import SciMLBase
+import SciMLBase: AbstractODEProblem, ImmutableNonlinearProblem, OptimizationFunction,
+    OptimizationProblem, init, remake, reinit!, solve, solve!
+import Setfield: @set!
+import SimpleNonlinearSolve: SimpleBroyden, SimpleLimitedMemoryBroyden
+import StaticArrays: @SArray, MVector, SArray, SVector
 
 ## Use lb and ub either as StaticArray or pass them separately as CuArrays
 ## Passing as CuArrays makes more sense, or maybe SArray? The based on no. of dimension
@@ -37,6 +44,13 @@ mutable struct MPSOGBest{T}
     position::AbstractArray{T}
     cost::T
 end
+
+struct PPSOptimizationCache{F, P} <: SciMLBase.AbstractOptimizationCache
+    f::F
+    p::P
+end
+
+_optimization_cache(prob) = PPSOptimizationCache(prob.f, prob.p)
 
 ## required overloads for min or max computation on particles
 function Base.isless(
@@ -82,5 +96,6 @@ include("./hybrid.jl")
 include("./precompilation.jl")
 
 export ParallelPSOKernel,
-    ParallelSyncPSOKernel, ParallelPSOArray, SerialPSO
+    ParallelSyncPSOKernel, ParallelPSOArray, SerialPSO, PSOAlgorithm, HybridPSO, LBFGS, BFGS,
+    pso_solve
 end

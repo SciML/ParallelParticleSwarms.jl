@@ -1,8 +1,4 @@
-using PrecompileTools
-
 @setup_workload begin
-    using StaticArrays
-
     # Simple test function that doesn't require external packages
     function _rosenbrock_precompile(x, p)
         res = zero(eltype(x))
