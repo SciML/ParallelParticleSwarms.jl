@@ -22,8 +22,9 @@ Run the algorithm-specific particle-swarm loop for a [`PSOAlgorithm`](@ref).
 # Interface
 
 Subtypes of `PSOAlgorithm` must implement this method. `global_best` must expose
-`position` and `cost` properties, `particles` is stored as the solution's
-`original` field, and `solve_time` is the elapsed time in seconds.
+`position` and `cost` properties, each entry of `particles` must expose a
+`position` property, and the particle positions are stored as the solution's
+`original` field. `solve_time` is the elapsed time in seconds.
 """
 function pso_solve end
 abstract type HybridPSOAlgorithm{LocalOpt} end

@@ -11,7 +11,7 @@ function SciMLBase.solve(
     u0 = as_svector(prob.u0)
     ∇f = as_svector_grad(instantiate_gradient(prob.f.f, prob.f.adtype))
     t0 = time()
-    nlprob = ImmutableNonlinearProblem{false}(∇f, u0, prob.p)
+    nlprob = NonlinearProblem{false}(∇f, u0, prob.p)
     nlsol = solve(
         nlprob,
         SimpleLimitedMemoryBroyden(; threshold = opt.threshold, linesearch);
@@ -46,7 +46,7 @@ function SciMLBase.solve(
     ∇f = as_svector_grad(instantiate_gradient(prob.f.f, prob.f.adtype))
 
     t0 = time()
-    nlprob = ImmutableNonlinearProblem{false}(∇f, u0, prob.p)
+    nlprob = NonlinearProblem{false}(∇f, u0, prob.p)
     nlsol = solve(
         nlprob,
         SimpleBroyden(; linesearch);

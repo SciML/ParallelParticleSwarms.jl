@@ -13,8 +13,8 @@ import LineSearch: StrongWolfeLineSearch
 import PrecompileTools: @compile_workload, @setup_workload
 import QuasiMonteCarlo: LatinHypercubeSample, SamplingAlgorithm
 import SciMLBase
-import SciMLBase: AbstractODEProblem, ImmutableNonlinearProblem, OptimizationFunction,
-    OptimizationProblem, init, remake, reinit!, solve, solve!
+import SciMLBase: OptimizationFunction, OptimizationProblem, NonlinearProblem, init, remake,
+    reinit!, solve, solve!
 import Setfield: @set!
 import SimpleNonlinearSolve: SimpleBroyden, SimpleLimitedMemoryBroyden
 import StaticArrays: @SArray, MVector, SArray, SVector

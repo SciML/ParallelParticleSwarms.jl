@@ -1,5 +1,5 @@
 using ParallelParticleSwarms
-using ParallelParticleSwarms: PSOAlgorithm, pso_solve
+import ParallelParticleSwarms: PSOAlgorithm, pso_solve
 using SciMLBase
 using Test
 
@@ -8,7 +8,7 @@ struct MockPSO <: PSOAlgorithm end
 function pso_solve(prob, ::MockPSO; kwargs...)
     position = copy(prob.u0)
     global_best = (; position, cost = prob.f(position, prob.p))
-    return global_best, [position], 0.0
+    return global_best, [(; position)], 0.0
 end
 
 @testset "PSOAlgorithm interface" begin

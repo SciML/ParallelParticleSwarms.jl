@@ -35,7 +35,7 @@ end
     )
     i = @index(Global, Linear)
     @inbounds x0 = as_svector(x0s[i])
-    nlprob = ImmutableNonlinearProblem{false}(grad_f, x0, p)
+    nlprob = NonlinearProblem{false}(grad_f, x0, p)
     sol = SciMLBase.solve(nlprob, nlalg; maxiters, abstol, reltol, grad_f = grad_f)
     u = as_svector(sol.u)
     T = eltype(u)
