@@ -1,4 +1,4 @@
-function SciMLBase.solve(
+function SciMLBase.__solve(
         prob::SciMLBase.OptimizationProblem,
         opt::LBFGS,
         args...;
@@ -11,7 +11,7 @@ function SciMLBase.solve(
     u0 = as_svector(prob.u0)
     ∇f = as_svector_grad(instantiate_gradient(prob.f.f, prob.f.adtype))
     t0 = time()
-    nlprob = NonlinearProblem{false}(∇f, u0, prob.p)
+    nlprob = ImmutableNonlinearProblem{false}(∇f, u0, prob.p)
     nlsol = solve(
         nlprob,
         SimpleLimitedMemoryBroyden(; threshold = opt.threshold, linesearch);
@@ -25,14 +25,16 @@ function SciMLBase.solve(
     t1 = time()
 
     return SciMLBase.build_solution(
-        _optimization_cache(prob), opt,
+        SciMLBase.DefaultOptimizationCache(prob.f, prob.p),
+        opt,
         θ,
-        prob.f(θ, prob.p)
+        prob.f(θ, prob.p);
+        stats = OptimizationStats(; time = t1 - t0)
     )
 end
 
 # `BFGS` here solves ∇f = 0 via `SimpleBroyden` (secant/quasi-Newton on the gradient).
-function SciMLBase.solve(
+function SciMLBase.__solve(
         prob::SciMLBase.OptimizationProblem,
         opt::BFGS,
         args...;
@@ -46,7 +48,7 @@ function SciMLBase.solve(
     ∇f = as_svector_grad(instantiate_gradient(prob.f.f, prob.f.adtype))
 
     t0 = time()
-    nlprob = NonlinearProblem{false}(∇f, u0, prob.p)
+    nlprob = ImmutableNonlinearProblem{false}(∇f, u0, prob.p)
     nlsol = solve(
         nlprob,
         SimpleBroyden(; linesearch);
@@ -60,8 +62,10 @@ function SciMLBase.solve(
     t1 = time()
 
     return SciMLBase.build_solution(
-        _optimization_cache(prob), opt,
+        SciMLBase.DefaultOptimizationCache(prob.f, prob.p),
+        opt,
         θ,
-        prob.f(θ, prob.p)
+        prob.f(θ, prob.p);
+        stats = OptimizationStats(; time = t1 - t0)
     )
 end

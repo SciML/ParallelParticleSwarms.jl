@@ -1,3 +1,14 @@
+# The local solve runs inside a GPU kernel, so it must stay allocation-free and
+# isbits: `ImmutableNonlinearProblem` plus these unwrapping overloads keep
+# SimpleNonlinearSolve off the mutable `NonlinearProblem`/`resid_prototype` path.
+@inline (f::NonlinearFunction{false, G})(u, p) where {G} = f.f(u, p)
+
+@inline NLBUtils.evaluate_f(prob::ImmutableNonlinearProblem, u) =
+    prob.f.f(u, prob.p)
+
+@inline NLBUtils.evaluate_f!!(prob::ImmutableNonlinearProblem, fu, u) =
+    prob.f.f(u, prob.p)
+
 @inline _unwrap_scalar(x::Real) = x
 @inline _unwrap_scalar(x) = x[]
 
@@ -35,7 +46,7 @@ end
     )
     i = @index(Global, Linear)
     @inbounds x0 = as_svector(x0s[i])
-    nlprob = NonlinearProblem{false}(grad_f, x0, p)
+    nlprob = ImmutableNonlinearProblem{false}(NonlinearFunction{false}(grad_f), x0, p)
     sol = SciMLBase.solve(nlprob, nlalg; maxiters, abstol, reltol, grad_f = grad_f)
     u = as_svector(sol.u)
     T = eltype(u)
@@ -74,6 +85,7 @@ function SciMLBase.solve!(
     result = similar(x0s)
     result_fx = KernelAbstractions.allocate(opt.backend, T, n)
 
+    t0 = time()
     simplebfgs_run!(opt.backend)(
         grad_f, f_raw, p,
         x0s, result, result_fx,
@@ -89,7 +101,10 @@ function SciMLBase.solve!(
         best_u = Array(result)[ind]
     end
 
+    solve_time = (time() - t0) + sol_pso.stats.time
     return SciMLBase.build_solution(
-        _optimization_cache(prob), opt, best_u, best_obj,
+        SciMLBase.DefaultOptimizationCache(prob.f, prob.p), opt,
+        best_u, best_obj;
+        stats = OptimizationStats(; time = solve_time),
     )
 end

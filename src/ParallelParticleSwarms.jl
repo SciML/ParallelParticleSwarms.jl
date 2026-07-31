@@ -5,16 +5,23 @@ import Adapt: adapt
 import ADTypes: AutoEnzyme, AutoForwardDiff
 import Atomix: @atomic, @atomicreplace
 import Enzyme: autodiff, Active, Reverse, Const, Duplicated, make_zero!
-import DiffEqGPU: GPUTsit5
+import DiffEqGPU: GPUTsit5, vectorized_solve, vectorized_asolve
+import ForwardDiff
 import KernelAbstractions
 import KernelAbstractions: CPU, @groupsize, @index, @kernel, @localmem, @private,
     @synchronize, @uniform, get_backend
 import LineSearch: StrongWolfeLineSearch
+import NonlinearSolveBase.Utils as NLBUtils
+# Loaded for its `solve(::OptimizationProblem, alg, ...)` method, which applies the
+# `allowsbounds`/`allowsconstraints` checks before forwarding to `SciMLBase.__solve`.
+# Nothing is imported from it by name.
+import OptimizationBase
 import PrecompileTools: @compile_workload, @setup_workload
+import QuasiMonteCarlo
 import QuasiMonteCarlo: LatinHypercubeSample, SamplingAlgorithm
 import SciMLBase
-import SciMLBase: OptimizationFunction, OptimizationProblem, NonlinearProblem, init, remake,
-    reinit!, solve, solve!
+import SciMLBase: ImmutableNonlinearProblem, NonlinearProblem, OptimizationFunction,
+    OptimizationProblem, OptimizationStats, init, remake, reinit!, solve, solve!
 # The SciML common interface that ParallelParticleSwarms reexports (see the second
 # `export` below), so that `using ParallelParticleSwarms` keeps giving access to the
 # problem, function, solution and solve API it exposed when it reexported SciMLBase
@@ -58,6 +65,7 @@ using SciMLBase: AbstractAnalyticalProblem, AddVector, AffineOperator, AllObserv
     update_coefficients!, user_cache, warn_compat
 import Setfield: @set!
 import SimpleNonlinearSolve: SimpleBroyden, SimpleLimitedMemoryBroyden
+import StaticArrays
 import StaticArrays: @SArray, MVector, SArray, SVector
 
 ## Use lb and ub either as StaticArray or pass them separately as CuArrays
@@ -85,13 +93,6 @@ mutable struct MPSOGBest{T}
     position::AbstractArray{T}
     cost::T
 end
-
-struct PPSOptimizationCache{F, P} <: SciMLBase.AbstractOptimizationCache
-    f::F
-    p::P
-end
-
-_optimization_cache(prob) = PPSOptimizationCache(prob.f, prob.p)
 
 ## required overloads for min or max computation on particles
 function Base.isless(

@@ -19,7 +19,7 @@ function __init!(
     ) where {T <: SamplingAlgorithm}
     backend = opt.backend
 
-    qmc_samples = _sample_positions(opt.num_particles, prob.lb, prob.ub, sampler)
+    qmc_samples = QuasiMonteCarlo.sample(opt.num_particles, prob.lb, prob.ub, sampler)
 
     qmc_samples = adapt(backend, qmc_samples)
 

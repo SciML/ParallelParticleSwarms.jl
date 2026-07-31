@@ -50,17 +50,45 @@ const REEXPORTS = (
     :user_cache, :warn_compat,
 )
 
+# The ignore lists below cover names this package genuinely needs but whose owners have
+# not declared them public. Each entry names the owner and, where a fix is in flight, the
+# upstream PR; when one merges, drop the entry rather than working around the name.
 run_qa(
     ParallelParticleSwarms;
     reexports_allow = REEXPORTS,
     # The reexported names are documented by SciMLBase; they are not rendered in this
     # package's docs, which cover the ParallelParticleSwarms API only.
     api_docs_kwargs = (; rendered_ignore = REEXPORTS),
+    # `NonlinearFunction` and `ImmutableNonlinearProblem` are extended in src/hybrid.jl to
+    # keep the local solve isbits and allocation-free inside GPU kernels; treat them as
+    # owned so Aqua does not flag the extensions as piracy.
+    aqua_kwargs = (;
+        piracies = (;
+            treat_as_own = [
+                ParallelParticleSwarms.NonlinearFunction,
+                ParallelParticleSwarms.ImmutableNonlinearProblem,
+            ],
+        ),
+    ),
     ei_kwargs = (;
         all_explicit_imports_are_public = (;
-            # `@atomic`/`@atomicreplace` are exported by Atomix but not declared
-            # `public` there; the ignore drops once Atomix marks them public.
-            ignore = (Symbol("@atomic"), Symbol("@atomicreplace")),
+            ignore = (
+                Symbol("@atomic"),          # Atomix, exported but no `public` declaration
+                Symbol("@atomicreplace"),   # Atomix, exported but no `public` declaration
+                :ImmutableNonlinearProblem, # SciMLBase, SciML/SciMLBase.jl#1482
+                :OptimizationStats,         # SciMLBase, SciML/SciMLBase.jl#1482
+                :vectorized_solve,          # DiffEqGPU, SciML/DiffEqGPU.jl#482
+                :vectorized_asolve,         # DiffEqGPU, SciML/DiffEqGPU.jl#482
+            ),
+        ),
+        all_qualified_accesses_are_public = (;
+            ignore = (
+                :DefaultOptimizationCache, # SciMLBase, SciML/SciMLBase.jl#1482
+                :evaluate_f,               # NonlinearSolveBase.Utils internal
+                :evaluate_f!!,             # NonlinearSolveBase.Utils internal
+                :gradient,                 # ForwardDiff, no `public` declarations
+                :sacollect,                # StaticArrays, no `public` declarations
+            ),
         ),
     ),
 )
