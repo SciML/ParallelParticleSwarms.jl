@@ -40,13 +40,15 @@ NonlinearSolveBase = "2.24"
 OptimizationBase = "5.2"
 PrecompileTools = "1"
 QuasiMonteCarlo = "0.3"
-RecursiveArrayTools = "4"
+RecursiveArrayTools = "4.3.5"
 Random = "1"
 SafeTestsets = "0.1"
-# 2.92 is where `ImmutableNonlinearProblem` moved into SciMLBase; it is imported
-# from its owner rather than through the NonlinearSolveBase re-export.
-SciMLBase = "2.92, 3.0"
-SciMLOperators = "1"
+# The reexported surface in src/ParallelParticleSwarms.jl is a static list, so the
+# lower bound has to be a release that actually has every name on it. 3.36 is where
+# `ConvexOptimizationProblem` landed; SciMLOperators/RecursiveArrayTools are pinned to
+# the oldest releases that resolve alongside it.
+SciMLBase = "3.36"
+SciMLOperators = "1.25.2"
 Setfield = "1.1"
 SimpleNonlinearSolve = "2.12"
 StaticArrays = "1.9.8"
