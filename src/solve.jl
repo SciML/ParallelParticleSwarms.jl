@@ -29,7 +29,7 @@ function SciMLBase.solve!(
     return SciMLBase.build_solution(
         SciMLBase.DefaultOptimizationCache(prob.f, prob.p), opt,
         gbest.position, prob.f(gbest.position, prob.p), original = particles_positions,
-        stats = Optimization.OptimizationStats(; time = t1 - t0)
+        stats = OptimizationStats(; time = t1 - t0)
     )
 end
 
@@ -54,7 +54,7 @@ function SciMLBase.solve!(
     return SciMLBase.build_solution(
         SciMLBase.DefaultOptimizationCache(prob.f, prob.p), opt,
         gbest.position, prob.f(gbest.position, prob.p), original = particles_positions,
-        stats = Optimization.OptimizationStats(; time = t1 - t0)
+        stats = OptimizationStats(; time = t1 - t0)
     )
 end
 
@@ -74,7 +74,6 @@ function SciMLBase.__solve(
         kwargs...
     )
     lb, ub = check_init_bounds(prob)
-    lb, ub = check_init_bounds(prob)
     prob = remake(prob; lb = lb, ub = ub)
 
     gbest, particles, solve_time = pso_solve(prob, opt, args...; maxiters, kwargs...)
@@ -82,7 +81,7 @@ function SciMLBase.__solve(
     return SciMLBase.build_solution(
         SciMLBase.DefaultOptimizationCache(prob.f, prob.p), opt,
         gbest.position, prob.f(gbest.position, prob.p), original = particles_positions,
-        stats = Optimization.OptimizationStats(; time = solve_time)
+        stats = OptimizationStats(; time = solve_time)
     )
 end
 

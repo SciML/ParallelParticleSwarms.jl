@@ -1,12 +1,6 @@
-using KernelAbstractions
-using SciMLBase
-using Optimization
-using LineSearch
-using SimpleNonlinearSolve
-using NonlinearSolveBase: ImmutableNonlinearProblem
-import SciMLBase: NonlinearFunction
-import NonlinearSolveBase.Utils as NLBUtils
-
+# The local solve runs inside a GPU kernel, so it must stay allocation-free and
+# isbits: `ImmutableNonlinearProblem` plus these unwrapping overloads keep
+# SimpleNonlinearSolve off the mutable `NonlinearProblem`/`resid_prototype` path.
 @inline (f::NonlinearFunction{false, G})(u, p) where {G} = f.f(u, p)
 
 @inline NLBUtils.evaluate_f(prob::ImmutableNonlinearProblem, u) =
@@ -111,6 +105,6 @@ function SciMLBase.solve!(
     return SciMLBase.build_solution(
         SciMLBase.DefaultOptimizationCache(prob.f, prob.p), opt,
         best_u, best_obj;
-        stats = Optimization.OptimizationStats(; time = solve_time),
+        stats = OptimizationStats(; time = solve_time),
     )
 end

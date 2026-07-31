@@ -28,7 +28,8 @@ function SciMLBase.__solve(
         SciMLBase.DefaultOptimizationCache(prob.f, prob.p),
         opt,
         θ,
-        prob.f(θ, prob.p)
+        prob.f(θ, prob.p);
+        stats = OptimizationStats(; time = t1 - t0)
     )
 end
 
@@ -64,6 +65,7 @@ function SciMLBase.__solve(
         SciMLBase.DefaultOptimizationCache(prob.f, prob.p),
         opt,
         θ,
-        prob.f(θ, prob.p)
+        prob.f(θ, prob.p);
+        stats = OptimizationStats(; time = t1 - t0)
     )
 end

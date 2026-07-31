@@ -1,21 +1,71 @@
 using SciMLTesting, ParallelParticleSwarms, Test
 using JET
 
+# The SciMLBase common interface ParallelParticleSwarms deliberately reexports, so that
+# `using ParallelParticleSwarms` is enough to build an `OptimizationProblem` and `solve`
+# it. Owned and documented upstream by SciMLBase; kept in sync with the reexport
+# `export` block in src/ParallelParticleSwarms.jl.
+const REEXPORTS = (
+    :AbstractAnalyticalProblem, :AddVector, :AffineOperator, :AllObserved,
+    :AnalyticalProblem, :BVPFunction, :BVProblem, :BatchIntegralFunction,
+    :BlockDiagonalOperator, :CallbackSet, :CheckInit, :Clocks, :ContinuousCallback,
+    :ConvexOptimizationProblem, :DAEFunction, :DAEProblem, :DAESolution, :DDEFunction,
+    :DDEProblem, :DiagonalOperator, :DiscreteCallback, :DiscreteFunction, :DiscreteProblem,
+    :DynamicalBVPFunction, :DynamicalDDEFunction, :DynamicalDDEProblem,
+    :DynamicalODEFunction, :DynamicalODEProblem, :DynamicalSDEFunction,
+    :DynamicalSDEProblem, :EigenvalueProblem, :EigenvalueSolution, :EigenvalueTarget,
+    :EnsembleAnalysis, :EnsembleContext, :EnsembleDistributed, :EnsembleProblem,
+    :EnsembleSerial, :EnsembleSolution, :EnsembleSplitThreads, :EnsembleSummary,
+    :EnsembleTestSolution, :EnsembleThreads, :FunctionOperator, :HomotopyNonlinearFunction,
+    :HomotopyProblem, :IdentityOperator, :ImplicitDiscreteFunction,
+    :ImplicitDiscreteProblem, :IncrementingODEFunction, :IncrementingODEProblem,
+    :IntegralFunction, :IntegralProblem, :IntegralSolution, :IntervalNonlinearFunction,
+    :IntervalNonlinearProblem, :InvertibleOperator, :LinearAliasSpecifier, :LinearProblem,
+    :LinearSolution, :MatrixOperator, :MultiObjectiveOptimizationFunction, :NoiseProblem,
+    :NonlinearFunction, :NonlinearLeastSquaresProblem, :NonlinearProblem,
+    :NonlinearSolution, :NullOperator, :ODEAliasSpecifier, :ODEFunction, :ODEInputFunction,
+    :ODEProblem, :ODESolution, :OptimizationFunction, :OptimizationProblem,
+    :OptimizationSolution, :PDENoTimeSolution, :PDEProblem, :PDETimeSeriesSolution,
+    :RODEFunction, :RODEProblem, :RODESolution, :ReturnCode, :SCCNonlinearProblem,
+    :SDDEFunction, :SDDEProblem, :SDEFunction, :SDEProblem, :SampledIntegralProblem,
+    :ScalarOperator, :SciMLBase, :SciMLOperators, :SecondOrderBVProblem,
+    :SecondOrderDDEProblem, :SecondOrderODEProblem, :SplitFunction, :SplitODEProblem,
+    :SplitSDEFunction, :SplitSDEProblem, :StaticWOperator, :SteadyStateProblem,
+    :SteadyStateSolution, :TensorProductOperator, :TensorSumOperator, :TimeDomain,
+    :TwoPointBVPFunction, :TwoPointBVProblem, :TwoPointDynamicalBVPFunction,
+    :TwoPointSecondOrderBVProblem, :VectorContinuousCallback, :WOperator, :add_saveat!,
+    :add_tstop!, :addat!, :addat_non_user_cache!, :addsteps!, :auto_dt_reset!,
+    :cache_operator, :change_t_via_interpolation!, :check_error, :check_keywords,
+    :concretize, :deleteat!, :deleteat_non_user_cache!, :derivative_discontinuity!,
+    :discretize, :du_cache, :first_tstop, :full_cache, :get_dt, :get_du, :get_du!,
+    :get_proposed_dt, :get_rng, :get_tmp_cache, :has_adjoint, :has_concretization, :has_exp,
+    :has_expmv, :has_expmv!, :has_ldiv, :has_ldiv!, :has_mul, :has_mul!, :has_rng,
+    :has_tstop, :init, :is_discrete_time_domain, :iscached, :isclock, :isconstant,
+    :iscontinuous, :isconvertible, :isdiscrete, :isinplace, :islinear, :issolverstepclock,
+    :issquare, :kronsum, :pop_tstop!, :rand_cache, :ratenoise_cache,
+    :reeval_internals_due_to_modification!, :reinit!, :remake, :resize_non_user_cache!,
+    :savevalues!, :set_abstol!, :set_proposed_dt!, :set_reltol!, :set_rng!, :set_t!,
+    :set_u!, :solve, :solve!, :step!, :supports_solve_rng, :symbolic_discretize,
+    :terminate!, :u_cache, :u_modified!, :update_coefficients, :update_coefficients!,
+    :user_cache, :warn_compat,
+)
+
+# The ignore lists below cover names this package genuinely needs but whose owners have
+# not declared them public. Each entry names the owner and, where a fix is in flight, the
+# upstream PR; when one merges, drop the entry rather than working around the name.
 run_qa(
     ParallelParticleSwarms;
-    api_docs_kwargs = (;
-        rendered = true,
-        rendered_ignore = Tuple(names(ParallelParticleSwarms.SciMLBase)),
-    ),
-    explicit_imports = true,
-    # `NonlinearFunction` (SciMLBase) and `ImmutableNonlinearProblem`
-    # (NonlinearSolveBase re-export of a SciMLBase type) are deliberately
-    # extended by the hybrid solver in src/hybrid.jl; treat them as owned so
-    # Aqua does not flag the extensions as piracy.
+    reexports_allow = REEXPORTS,
+    # The reexported names are documented by SciMLBase; they are not rendered in this
+    # package's docs, which cover the ParallelParticleSwarms API only.
+    api_docs_kwargs = (; rendered_ignore = REEXPORTS),
+    # `NonlinearFunction` and `ImmutableNonlinearProblem` are extended in src/hybrid.jl to
+    # keep the local solve isbits and allocation-free inside GPU kernels; treat them as
+    # owned so Aqua does not flag the extensions as piracy.
     aqua_kwargs = (;
         piracies = (;
             treat_as_own = [
-                ParallelParticleSwarms.SciMLBase.NonlinearFunction,
+                ParallelParticleSwarms.NonlinearFunction,
                 ParallelParticleSwarms.ImmutableNonlinearProblem,
             ],
         ),
@@ -23,39 +73,32 @@ run_qa(
     ei_kwargs = (;
         all_explicit_imports_are_public = (;
             ignore = (
-                Symbol("@atomic"),          # KernelAbstractions (re-exports Atomix), still non-public
-                Symbol("@atomicreplace"),   # KernelAbstractions (re-exports Atomix), still non-public
-                :ImmutableNonlinearProblem, # SciMLBase type re-exported by NonlinearSolveBase, still non-public there
-                :vectorized_solve,          # DiffEqGPU internal
-                :vectorized_asolve,         # DiffEqGPU internal
+                Symbol("@atomic"),          # Atomix, exported but no `public` declaration
+                Symbol("@atomicreplace"),   # Atomix, exported but no `public` declaration
+                :ImmutableNonlinearProblem, # SciMLBase, SciML/SciMLBase.jl#1482
+                :OptimizationStats,         # SciMLBase, SciML/SciMLBase.jl#1482
+                :vectorized_solve,          # DiffEqGPU, SciML/DiffEqGPU.jl#482
+                :vectorized_asolve,         # DiffEqGPU, SciML/DiffEqGPU.jl#482
             ),
-        ),
-        all_explicit_imports_via_owners = (;
-            ignore = (
-                Symbol("@atomic"),          # owner Atomix, re-exported by KernelAbstractions
-                Symbol("@atomicreplace"),   # owner Atomix, re-exported by KernelAbstractions
-                :ImmutableNonlinearProblem, # owner SciMLBase, imported via NonlinearSolveBase
-            ),
-        ),
-        all_qualified_accesses_via_owners = (;
-            ignore = (:OptimizationStats,), # owner SciMLBase, accessed via Optimization
         ),
         all_qualified_accesses_are_public = (;
             ignore = (
-                :DefaultOptimizationCache, # SciMLBase internal
-                :OptimizationStats,        # Optimization internal (owner SciMLBase)
-                :__solve,                  # SciMLBase internal
+                :DefaultOptimizationCache, # SciMLBase, SciML/SciMLBase.jl#1482
                 :evaluate_f,               # NonlinearSolveBase.Utils internal
                 :evaluate_f!!,             # NonlinearSolveBase.Utils internal
-                :gradient,                 # ForwardDiff internal
-                :sacollect,                # StaticArrays internal
-                :sample,                   # QuasiMonteCarlo internal
+                :gradient,                 # ForwardDiff, no `public` declarations
+                :sacollect,                # StaticArrays, no `public` declarations
             ),
         ),
     ),
-    # The module relies on many implicit imports from heavy `using` deps
-    # (SciMLBase, KernelAbstractions, StaticArrays, Optimization, ...); making
-    # them all explicit is a large refactor tracked in
-    # SciML/ParallelParticleSwarms.jl#106.
-    ei_broken = (:no_implicit_imports,),
 )
+
+@testset "Reexport surface" begin
+    # Every approved reexport must actually be reachable from `using
+    # ParallelParticleSwarms`, so the allow-list cannot drift into approving names the
+    # package no longer provides.
+    @testset "$name" for name in REEXPORTS
+        @test Base.ispublic(ParallelParticleSwarms, name)
+        @test isdefined(ParallelParticleSwarms, name)
+    end
+end

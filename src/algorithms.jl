@@ -1,4 +1,32 @@
+"""
+    PSOAlgorithm
+
+Abstract supertype for particle-swarm optimization algorithms implemented by
+ParallelParticleSwarms.
+
+# Interface
+
+To add a CPU algorithm, subtype `PSOAlgorithm` and implement
+[`pso_solve`](@ref) for the new type. The method must return
+`(global_best, particles, solve_time)`, where `global_best` has `position` and
+`cost` properties. ParallelParticleSwarms uses this interface to implement the
+standard `SciMLBase.solve` contract for `OptimizationProblem`s.
+"""
 abstract type PSOAlgorithm end
+
+"""
+    pso_solve(prob, alg; maxiters, kwargs...) -> (global_best, particles, solve_time)
+
+Run the algorithm-specific particle-swarm loop for a [`PSOAlgorithm`](@ref).
+
+# Interface
+
+Subtypes of `PSOAlgorithm` must implement this method. `global_best` must expose
+`position` and `cost` properties, each entry of `particles` must expose a
+`position` property, and the particle positions are stored as the solution's
+`original` field. `solve_time` is the elapsed time in seconds.
+"""
+function pso_solve end
 abstract type HybridPSOAlgorithm{LocalOpt} end
 abstract type GPUSamplingAlgorithm end
 
@@ -186,6 +214,15 @@ end
 SciMLBase.allowsbounds(::PSOAlgorithm) = true
 SciMLBase.allowsconstraints(::PSOAlgorithm) = true
 
+"""
+    LBFGS(; threshold = 10)
+
+Local limited-memory Broyden refinement used by [`HybridPSO`](@ref).
+
+# Keywords
+
+- `threshold`: Maximum number of secant updates retained by the local solver.
+"""
 struct LBFGS
     threshold::Int
 end
@@ -194,8 +231,25 @@ function LBFGS(; threshold = 10)
     return LBFGS(threshold)
 end
 
+"""
+    BFGS()
+
+Local Broyden refinement used by [`HybridPSO`](@ref).
+"""
 struct BFGS end
 
+"""
+    HybridPSO(; backend = CPU(), pso = ParallelPSOKernel(100; global_update = false, backend),
+        local_opt = LBFGS())
+
+Run a particle-swarm search followed by local Broyden refinement.
+
+# Keywords
+
+- `backend`: KernelAbstractions backend used by the particle-swarm stage.
+- `pso`: Particle-swarm algorithm used to generate local starting points.
+- `local_opt`: [`LBFGS`](@ref) or [`BFGS`](@ref) local refinement algorithm.
+"""
 struct HybridPSO{Backend, LocalOpt} <: HybridPSOAlgorithm{LocalOpt}
     pso::PSOAlgorithm
     local_opt::LocalOpt

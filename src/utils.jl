@@ -12,7 +12,7 @@ function uniform(dim::Int, lb::AbstractArray{T}, ub::AbstractArray{T}) where {T}
     return arr
 end
 
-function _gen_sampling_kernel(prob, num_particles::Int, sampling::QuasiMonteCarlo.SamplingAlgorithm)
+function _gen_sampling_kernel(prob, num_particles::Int, sampling::SamplingAlgorithm)
     lb = prob.lb
     ub = prob.ub
 
@@ -86,7 +86,7 @@ end
 @kernel function gpu_init_particles!(
         particles, qmc_particles, prob, opt, ::Type{T},
         ::Type{T1}
-    ) where {T <: SArray, T1 <: QuasiMonteCarlo.SamplingAlgorithm}
+    ) where {T <: SArray, T1 <: SamplingAlgorithm}
     i = @index(Global, Linear)
 
     dim = length(prob.u0)

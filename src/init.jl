@@ -16,7 +16,7 @@ function __init!(
         particles, prob::OptimizationProblem,
         opt::Union{ParallelPSOKernel, ParallelSyncPSOKernel}, sampler::T,
         args...; kwargs...
-    ) where {T <: QuasiMonteCarlo.SamplingAlgorithm}
+    ) where {T <: SamplingAlgorithm}
     backend = opt.backend
 
     qmc_samples = QuasiMonteCarlo.sample(opt.num_particles, prob.lb, prob.ub, sampler)
