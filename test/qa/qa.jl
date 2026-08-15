@@ -58,7 +58,7 @@ run_qa(
     reexports_allow = REEXPORTS,
     # The reexported names are documented by SciMLBase; they are not rendered in this
     # package's docs, which cover the ParallelParticleSwarms API only.
-    api_docs_kwargs = (; rendered_ignore = REEXPORTS),
+    api_docs_kwargs = (; ignore = REEXPORTS, rendered_ignore = REEXPORTS),
     # `NonlinearFunction` and `ImmutableNonlinearProblem` are extended in src/hybrid.jl to
     # keep the local solve isbits and allocation-free inside GPU kernels; treat them as
     # owned so Aqua does not flag the extensions as piracy.
@@ -94,6 +94,8 @@ run_qa(
 )
 
 @testset "Reexport surface" begin
+    @test Set(public_reexports(ParallelParticleSwarms)) == Set(REEXPORTS)
+
     # Every approved reexport must actually be reachable from `using
     # ParallelParticleSwarms`, so the allow-list cannot drift into approving names the
     # package no longer provides.
