@@ -45,7 +45,9 @@ using QuasiMonteCarlo
     sol = solve(
         prob,
         SerialPSO(n_particles),
-        maxiters = 600
+        maxiters = 600,
+        c1 = 1.4f0,
+        c2 = 1.6f0
     )
 
     @test sol.objective < 1.0e-4

@@ -27,7 +27,10 @@ include("./utils.jl")
 
     n_particles = 5000
 
-    sol = solve(prob, ParallelPSOKernel(n_particles; backend), maxiters = 500)
+    sol = solve(
+        prob, ParallelPSOKernel(n_particles; backend);
+        maxiters = 500, c1 = 1.4f0, c2 = 1.6f0
+    )
 
     @test prob.f(prob.u0, prob.p) > sol.objective
 
@@ -38,7 +41,9 @@ include("./utils.jl")
     sol = solve(
         prob,
         ParallelPSOKernel(n_particles; backend, global_update = false),
-        maxiters = 1000
+        maxiters = 1000,
+        c1 = 1.4f0,
+        c2 = 1.6f0
     )
 
     @test prob.f(prob.u0, prob.p) > sol.objective
@@ -48,7 +53,9 @@ include("./utils.jl")
     sol = solve(
         prob,
         ParallelSyncPSOKernel(n_particles; backend),
-        maxiters = 500
+        maxiters = 500,
+        c1 = 1.4f0,
+        c2 = 1.6f0
     )
 
     @test prob.f(prob.u0, prob.p) > sol.objective

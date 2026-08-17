@@ -54,7 +54,11 @@ l0 = rosenbrock(x0, p)
 @time sol = Optimization.solve(
     prob,
     ParallelParticleSwarms.HybridPSO(; backend),
-    maxiters = 30
+    maxiters = 30,
+    w = 0.7f0,
+    wdamp = 0.99f0,
+    c1 = 1.4f0,
+    c2 = 1.6f0
 )
 @show sol.objective
 
