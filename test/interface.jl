@@ -1,6 +1,5 @@
 using ParallelParticleSwarms
 import ParallelParticleSwarms: PSOAlgorithm, pso_solve
-using SciMLBase
 using Test
 
 struct MockPSO <: PSOAlgorithm end
@@ -13,7 +12,7 @@ end
 
 @testset "PSOAlgorithm interface" begin
     prob = OptimizationProblem((u, _) -> sum(abs2, u), [1.0, -2.0], nothing)
-    sol = SciMLBase.solve(prob, MockPSO())
+    sol = solve(prob, MockPSO())
 
     @test sol.u == prob.u0
     @test sol.objective == 5.0

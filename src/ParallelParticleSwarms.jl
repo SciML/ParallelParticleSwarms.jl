@@ -20,57 +20,8 @@ import PrecompileTools: @compile_workload, @setup_workload
 import QuasiMonteCarlo
 import QuasiMonteCarlo: LatinHypercubeSample, SamplingAlgorithm
 import SciMLBase
-import SciMLBase: ImmutableNonlinearProblem, NonlinearProblem, OptimizationFunction,
+import SciMLBase: ImmutableNonlinearProblem, NonlinearFunction, OptimizationFunction,
     OptimizationProblem, OptimizationStats, init, remake, reinit!, solve, solve!
-# The SciML common interface that ParallelParticleSwarms reexports (see the second
-# `export` below), so that `using ParallelParticleSwarms` keeps giving access to the
-# problem, function, solution and solve API it exposed when it reexported SciMLBase
-# wholesale. Each name is imported from the module that owns it: importing a
-# SciMLOperators name through SciMLBase's reexport leaves the binding unresolved
-# ("Imported binding ... was undeclared at import time" on Julia 1.12) and Aqua then
-# reports it as an undefined export.
-using SciMLBase: AbstractAnalyticalProblem, AnalyticalProblem, BVPFunction,
-    BVProblem, BatchIntegralFunction, CallbackSet, CheckInit, Clocks, ContinuousCallback,
-    ConvexOptimizationProblem, DAEFunction, DAEProblem, DAESolution, DDEFunction,
-    DDEProblem, DiscreteCallback, DiscreteFunction, DiscreteProblem, DynamicalBVPFunction,
-    DynamicalDDEFunction, DynamicalDDEProblem, DynamicalODEFunction, DynamicalODEProblem,
-    DynamicalSDEFunction, DynamicalSDEProblem, EigenvalueProblem, EigenvalueSolution,
-    EigenvalueTarget, EnsembleAnalysis, EnsembleContext, EnsembleDistributed,
-    EnsembleProblem, EnsembleSerial, EnsembleSolution, EnsembleSplitThreads,
-    EnsembleSummary, EnsembleTestSolution, EnsembleThreads, HomotopyNonlinearFunction,
-    HomotopyProblem, ImplicitDiscreteFunction, ImplicitDiscreteProblem,
-    IncrementingODEFunction, IncrementingODEProblem, IntegralFunction, IntegralProblem,
-    IntegralSolution, IntervalNonlinearFunction, IntervalNonlinearProblem,
-    LinearAliasSpecifier, LinearProblem, LinearSolution, MultiObjectiveOptimizationFunction,
-    NoiseProblem, NonlinearFunction, NonlinearLeastSquaresProblem, NonlinearSolution,
-    ODEAliasSpecifier, ODEFunction, ODEInputFunction, ODEProblem, ODESolution,
-    OptimizationSolution, PDENoTimeSolution, PDEProblem, PDETimeSeriesSolution,
-    RODEFunction, RODEProblem, RODESolution, ReturnCode, SCCNonlinearProblem, SDDEFunction,
-    SDDEProblem, SDEFunction, SDEProblem, SampledIntegralProblem, SecondOrderBVProblem,
-    SecondOrderDDEProblem, SecondOrderODEProblem, SplitFunction, SplitODEProblem,
-    SplitSDEFunction, SplitSDEProblem, SteadyStateProblem, SteadyStateSolution, TimeDomain,
-    TwoPointBVPFunction, TwoPointBVProblem, TwoPointDynamicalBVPFunction,
-    TwoPointSecondOrderBVProblem, VectorContinuousCallback, add_saveat!, add_tstop!, addat!,
-    addat_non_user_cache!, addsteps!, auto_dt_reset!, change_t_via_interpolation!,
-    check_error, check_keywords, deleteat_non_user_cache!, derivative_discontinuity!,
-    discretize, du_cache, first_tstop, full_cache, get_dt, get_du, get_du!, get_proposed_dt,
-    get_rng, get_tmp_cache, has_rng, has_tstop, is_discrete_time_domain, isclock,
-    iscontinuous, isdiscrete, isinplace, issolverstepclock, pop_tstop!, rand_cache,
-    ratenoise_cache, reeval_internals_due_to_modification!, resize_non_user_cache!,
-    savevalues!, set_abstol!, set_proposed_dt!, set_reltol!, set_rng!, set_t!, set_u!,
-    step!, supports_solve_rng, symbolic_discretize, terminate!, u_cache, u_modified!,
-    user_cache, warn_compat
-using SciMLOperators: AddVector, AffineOperator, BlockDiagonalOperator, DiagonalOperator,
-    FunctionOperator, IdentityOperator, InvertibleOperator, MatrixOperator, NullOperator,
-    ScalarOperator, SciMLOperators, StaticWOperator, TensorProductOperator,
-    TensorSumOperator, WOperator, cache_operator, concretize, has_adjoint,
-    has_concretization, has_exp, has_expmv, has_expmv!, has_ldiv, has_ldiv!, has_mul,
-    has_mul!, iscached, isconstant, isconvertible, islinear, issquare, kronsum,
-    update_coefficients, update_coefficients!
-using Base: deleteat!
-# `AllObserved` reaches SciMLBase from RecursiveArrayTools, so importing it through
-# SciMLBase leaves the binding unresolved the same way the SciMLOperators names do.
-using RecursiveArrayTools: AllObserved
 import Setfield: @set!
 import SimpleNonlinearSolve: SimpleBroyden, SimpleLimitedMemoryBroyden
 import StaticArrays
@@ -147,45 +98,5 @@ include("./precompilation.jl")
 
 export ParallelPSOKernel,
     ParallelSyncPSOKernel, ParallelPSOArray, SerialPSO, PSOAlgorithm, HybridPSO, LBFGS, BFGS,
-    pso_solve
-
-# Reexported SciML common interface; approved via `reexports_allow` in test/qa/qa.jl.
-export AbstractAnalyticalProblem, AddVector, AffineOperator, AllObserved, AnalyticalProblem,
-    BVPFunction, BVProblem, BatchIntegralFunction, BlockDiagonalOperator, CallbackSet,
-    CheckInit, Clocks, ContinuousCallback, ConvexOptimizationProblem, DAEFunction,
-    DAEProblem, DAESolution, DDEFunction, DDEProblem, DiagonalOperator, DiscreteCallback,
-    DiscreteFunction, DiscreteProblem, DynamicalBVPFunction, DynamicalDDEFunction,
-    DynamicalDDEProblem, DynamicalODEFunction, DynamicalODEProblem, DynamicalSDEFunction,
-    DynamicalSDEProblem, EigenvalueProblem, EigenvalueSolution, EigenvalueTarget,
-    EnsembleAnalysis, EnsembleContext, EnsembleDistributed, EnsembleProblem, EnsembleSerial,
-    EnsembleSolution, EnsembleSplitThreads, EnsembleSummary, EnsembleTestSolution,
-    EnsembleThreads, FunctionOperator, HomotopyNonlinearFunction, HomotopyProblem,
-    IdentityOperator, ImplicitDiscreteFunction, ImplicitDiscreteProblem,
-    IncrementingODEFunction, IncrementingODEProblem, IntegralFunction, IntegralProblem,
-    IntegralSolution, IntervalNonlinearFunction, IntervalNonlinearProblem,
-    InvertibleOperator, LinearAliasSpecifier, LinearProblem, LinearSolution, MatrixOperator,
-    MultiObjectiveOptimizationFunction, NoiseProblem, NonlinearFunction,
-    NonlinearLeastSquaresProblem, NonlinearProblem, NonlinearSolution, NullOperator,
-    ODEAliasSpecifier, ODEFunction, ODEInputFunction, ODEProblem, ODESolution,
-    OptimizationFunction, OptimizationProblem, OptimizationSolution, PDENoTimeSolution,
-    PDEProblem, PDETimeSeriesSolution, RODEFunction, RODEProblem, RODESolution, ReturnCode,
-    SCCNonlinearProblem, SDDEFunction, SDDEProblem, SDEFunction, SDEProblem,
-    SampledIntegralProblem, ScalarOperator, SciMLBase, SciMLOperators, SecondOrderBVProblem,
-    SecondOrderDDEProblem, SecondOrderODEProblem, SplitFunction, SplitODEProblem,
-    SplitSDEFunction, SplitSDEProblem, StaticWOperator, SteadyStateProblem,
-    SteadyStateSolution, TensorProductOperator, TensorSumOperator, TimeDomain,
-    TwoPointBVPFunction, TwoPointBVProblem, TwoPointDynamicalBVPFunction,
-    TwoPointSecondOrderBVProblem, VectorContinuousCallback, WOperator, add_saveat!,
-    add_tstop!, addat!, addat_non_user_cache!, addsteps!, auto_dt_reset!, cache_operator,
-    change_t_via_interpolation!, check_error, check_keywords, concretize, deleteat!,
-    deleteat_non_user_cache!, derivative_discontinuity!, discretize, du_cache, first_tstop,
-    full_cache, get_dt, get_du, get_du!, get_proposed_dt, get_rng, get_tmp_cache,
-    has_adjoint, has_concretization, has_exp, has_expmv, has_expmv!, has_ldiv, has_ldiv!,
-    has_mul, has_mul!, has_rng, has_tstop, init, is_discrete_time_domain, iscached, isclock,
-    isconstant, iscontinuous, isconvertible, isdiscrete, isinplace, islinear,
-    issolverstepclock, issquare, kronsum, pop_tstop!, rand_cache, ratenoise_cache,
-    reeval_internals_due_to_modification!, reinit!, remake, resize_non_user_cache!,
-    savevalues!, set_abstol!, set_proposed_dt!, set_reltol!, set_rng!, set_t!, set_u!,
-    solve, solve!, step!, supports_solve_rng, symbolic_discretize, terminate!, u_cache,
-    u_modified!, update_coefficients, update_coefficients!, user_cache, warn_compat
+    OptimizationProblem, solve, pso_solve
 end
