@@ -12,12 +12,6 @@
 @inline _unwrap_scalar(x::Real) = x
 @inline _unwrap_scalar(x) = x[]
 
-function _hybrid_bounds(prob, ::Val{d}, ::Type{T}) where {d, T}
-    lb = prob.lb === nothing ? nothing : SVector{d, T}(prob.lb)
-    ub = prob.ub === nothing ? nothing : SVector{d, T}(prob.ub)
-    return lb, ub
-end
-
 struct BoundedGrad{G, LB, UB}
     raw::G
     lb::LB
@@ -36,11 +30,6 @@ end
     return as_svector(g)
 end
 
-@inline function _nlalg(local_opt::LBFGS, linesearch)
-    return SimpleLimitedMemoryBroyden(; threshold = local_opt.threshold, linesearch)
-end
-@inline _nlalg(::BFGS, linesearch) = SimpleBroyden(; linesearch)
-
 @kernel function simplebfgs_run!(
         grad_f, f_raw, p, x0s, result, result_fx, nlalg, maxiters, abstol, reltol
     )
@@ -56,14 +45,14 @@ end
 end
 
 function SciMLBase.solve!(
-        cache::HybridPSOCache, opt::HybridPSO{Backend, LocalOpt}, args...;
+        cache::HybridPSOCache, opt::HybridPSO{Backend, <:BFGS}, args...;
         abstol = nothing,
         reltol = nothing,
         maxiters = 100,
         local_maxiters = 50,
         linesearch = StrongWolfeLineSearch(),
         kwargs...
-    ) where {Backend, LocalOpt <: Union{LBFGS, BFGS}}
+    ) where {Backend}
 
     sol_pso = SciMLBase.solve!(cache.pso_cache; maxiters)
     best_u = sol_pso.u
@@ -74,11 +63,10 @@ function SciMLBase.solve!(
     p = prob.p
     T = eltype(prob.u0)
     d = length(prob.u0)
-    lb, ub = _hybrid_bounds(prob, Val(d), T)
+    lb, ub = _static_bounds(prob, Val(d), T)
 
     grad_f = as_svector_grad(BoundedGrad(ForwardDiffGradient(f_raw), lb, ub))
-
-    nlalg = _nlalg(opt.local_opt, linesearch)
+    nlalg = SimpleBroyden(; linesearch)
 
     x0s = sol_pso.original
     n = length(x0s)
@@ -99,6 +87,66 @@ function SciMLBase.solve!(
     if minobj < best_obj
         best_obj = minobj
         best_u = Array(result)[ind]
+    end
+
+    solve_time = (time() - t0) + sol_pso.stats.time
+    return SciMLBase.build_solution(
+        SciMLBase.DefaultOptimizationCache(prob.f, prob.p), opt,
+        best_u, best_obj;
+        stats = OptimizationStats(; time = solve_time),
+    )
+end
+
+function SciMLBase.solve!(
+        cache::HybridPSOCache, opt::HybridPSO{Backend, <:SimpleLBFGS}, args...;
+        abstol = nothing,
+        reltol = nothing,
+        maxiters = 100,
+        local_maxiters = 50,
+        linesearch = opt.local_opt.linesearch,
+        kwargs...
+    ) where {Backend}
+
+    sol_pso = SciMLBase.solve!(cache.pso_cache; maxiters)
+    best_u = sol_pso.u
+    best_obj = _unwrap_scalar(sol_pso.objective)
+
+    prob = cache.prob
+    f_raw = prob.f.f
+    p = prob.p
+    T = eltype(prob.u0)
+    d = length(prob.u0)
+    lb, ub = _static_bounds(prob, Val(d), T)
+
+    result = similar(sol_pso.original)
+    particles = cache.pso_cache.particles
+    n = length(particles)
+    length(result) == n || throw(DimensionMismatch("particle and result counts must match"))
+    result_fx = KernelAbstractions.allocate(opt.backend, T, n)
+
+    t0 = time()
+    grad_f = as_svector_grad(ForwardDiffGradient(f_raw))
+    linesearch isa StrongWolfeLineSearch ||
+        throw(ArgumentError("HybridPSO with SimpleLBFGS requires a StrongWolfeLineSearch"))
+    typed_linesearch = StrongWolfeLineSearch(;
+        autodiff = linesearch.autodiff,
+        c1 = T(linesearch.c1), c2 = T(linesearch.c2),
+        α_init = T(linesearch.α_init), α_max = T(linesearch.α_max),
+        maxiters = linesearch.maxiters, zoom_maxiters = linesearch.zoom_maxiters,
+    )
+    lbfgs_run!(opt.backend)(
+        grad_f, f_raw, p, particles, result, result_fx, lb, ub,
+        local_maxiters, abstol, reltol, typed_linesearch,
+        SimpleOptimization.__get_threshold(opt.local_opt);
+        ndrange = n,
+    )
+    KernelAbstractions.synchronize(opt.backend)
+
+    fx_host = Array(result_fx)
+    minobj, ind = findmin(fx_host)
+    if minobj < best_obj
+        best_obj = minobj
+        best_u = Array(@view result[ind:ind])[1]
     end
 
     solve_time = (time() - t0) + sol_pso.stats.time

@@ -8,9 +8,12 @@ ParallelSyncPSOKernel
 ParallelPSOArray
 SerialPSO
 HybridPSO
-LBFGS
 BFGS
 ```
+
+Local L-BFGS polish for [`HybridPSO`](@ref) uses
+[`SimpleLBFGS`](https://docs.sciml.ai/Optimization/stable/optimization_packages/simpleoptimization/)
+from SimpleOptimization.jl.
 
 ## Extension Interface
 

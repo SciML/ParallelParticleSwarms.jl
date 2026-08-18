@@ -1,102 +1,69 @@
-using ParallelParticleSwarms, Optimization, StaticArrays
+using ParallelParticleSwarms, Optimization, StaticArrays, KernelAbstractions, Test
 
-include("./utils.jl")
-
-# Reclaim GPU memory from previous test files to avoid OOM
-if GROUP == "CUDA"
-    CUDA.reclaim()
-end
-
-function objf(x, p)
-    return 1 - x[1]^2 - x[2]^2
-end
-
-# Use out-of-place form {false} since SVector is immutable
-optprob = OptimizationFunction{false}(objf, Optimization.AutoEnzyme())
-x0 = rand(2)
-x0 = SVector{2}(x0)
-prob = OptimizationProblem(optprob, x0)
-l1 = objf(x0, nothing)
-sol = Optimization.solve(
-    prob,
-    ParallelParticleSwarms.LBFGS(),
-    maxiters = 10
-)
-
-N = 10
-function rosenbrock(x, p)
-    res = zero(eltype(x))
-    for i in 1:(length(x) - 1)
-        res += p[2] * (x[i + 1] - x[i]^2)^2 + (p[1] - x[i])^2
+@testset "SimpleLBFGS hybrid local polish" begin
+    function _solve_hybrid(f, x0, p = nothing; lb = nothing, ub = nothing,
+            maxiters = 50, local_maxiters = 200)
+        n = length(x0)
+        optf = OptimizationFunction{false}(f, Optimization.AutoForwardDiff())
+        u0 = SVector{n, Float64}(x0)
+        kwargs = NamedTuple()
+        if lb !== nothing
+            kwargs = (;
+                lb = SVector{n, Float64}(lb),
+                ub = SVector{n, Float64}(ub),
+            )
+        end
+        return solve(
+            OptimizationProblem(optf, u0, p; kwargs...),
+            HybridPSO(;
+                pso = ParallelSyncPSOKernel(64; backend = CPU()),
+                backend = CPU(),
+                local_opt = SimpleLBFGS(),
+            );
+            maxiters, local_maxiters, abstol = 1.0e-10
+        )
     end
-    return res
+
+    beale(x, p) = (1.5 - x[1] + x[1] * x[2])^2 +
+        (2.25 - x[1] + x[1] * x[2]^2)^2 +
+        (2.625 - x[1] + x[1] * x[2]^3)^2
+    booth(x, p) = (x[1] + 2x[2] - 7)^2 + (2x[1] + x[2] - 5)^2
+    himmelblau(x, p) = (x[1]^2 + x[2] - 11)^2 + (x[1] + x[2]^2 - 7)^2
+    quadratic(x, p) = p[1] * (x[1] - 1)^2 + (x[2] + 2)^2
+    boundary_quadratic(x, p) = (x[1] + one(eltype(x)))^2
+    rosen2(x, p) = (p[1] - x[1])^2 + p[2] * (x[2] - x[1]^2)^2
+
+    sol = _solve_hybrid(rosen2, [0.0, 0.0], [1.0, 100.0])
+    @test sol.u ≈ [1.0, 1.0] atol = 1.0e-4
+    @test sol.objective < 1.0e-8
+
+    sol = _solve_hybrid(rosen2, [-1.2, 1.0], [1.0, 100.0])
+    @test sol.u ≈ [1.0, 1.0] atol = 1.0e-4
+    @test sol.objective < 1.0e-8
+
+    sol = _solve_hybrid(rosen2, [0.0, 0.0], [1.0, 100.0]; lb = [-2.0, -2.0], ub = [2.0, 2.0])
+    @test sol.u ≈ [1.0, 1.0] atol = 1.0e-4
+    @test sol.objective < 1.0e-8
+    @test all(-2 .≤ sol.u) && all(sol.u .≤ 2)
+
+    sol = _solve_hybrid(beale, [1.0, 1.0])
+    @test sol.u ≈ [3.0, 0.5] atol = 1.0e-4
+    @test sol.objective < 1.0e-8
+
+    sol = _solve_hybrid(booth, [1.0, 1.0])
+    @test sol.u ≈ [1.0, 3.0] atol = 1.0e-4
+    @test sol.objective < 1.0e-8
+
+    sol = _solve_hybrid(himmelblau, [1.0, 1.0])
+    @test sol.objective < 1.0e-8
+
+    sol = _solve_hybrid(quadratic, [4.0, 4.0], [1000.0]; lb = [-5.0, -5.0], ub = [5.0, 5.0])
+    @test sol.u ≈ [1.0, -2.0] atol = 1.0e-4
+    @test sol.objective < 1.0e-8
+    @test all(-5 .≤ sol.u) && all(sol.u .≤ 5)
+
+    sol = _solve_hybrid(boundary_quadratic, [1.5]; lb = [0.0], ub = [2.0],
+        maxiters = 20, local_maxiters = 50)
+    @test sol.u[1] ≈ 0.0 atol = 1.0e-6
+    @test sol.objective ≈ 1.0 atol = 1.0e-6
 end
-x0 = @SArray rand(Float32, N)
-p = @SArray Float32[1.0, 100.0]
-# Use out-of-place form {false} since SArray is immutable
-optf = OptimizationFunction{false}(rosenbrock, Optimization.AutoForwardDiff())
-prob = OptimizationProblem(optf, x0, p)
-l0 = rosenbrock(x0, p)
-
-@time sol = Optimization.solve(
-    prob,
-    ParallelParticleSwarms.LBFGS(; threshold = 7),
-    maxiters = 20
-)
-@show sol.objective
-@time sol = Optimization.solve(
-    prob,
-    ParallelParticleSwarms.ParallelPSOKernel(100; backend),
-    maxiters = 100
-)
-@show sol.objective
-
-@time sol = Optimization.solve(
-    prob,
-    ParallelParticleSwarms.HybridPSO(; backend),
-    maxiters = 30
-)
-@show sol.objective
-
-@time sol = Optimization.solve(
-    prob,
-    ParallelParticleSwarms.HybridPSO(;
-        local_opt = ParallelParticleSwarms.BFGS(), backend = backend
-    ),
-    maxiters = 30
-)
-@show sol.objective
-
-# Use out-of-place form {false} since SArray is immutable
-optf = OptimizationFunction{false}(rosenbrock, Optimization.AutoEnzyme())
-prob = OptimizationProblem(optf, x0, p)
-l0 = rosenbrock(x0, p)
-
-@time sol = Optimization.solve(
-    prob,
-    ParallelParticleSwarms.LBFGS(; threshold = 7),
-    maxiters = 20
-)
-@show sol.objective
-@time sol = Optimization.solve(
-    prob,
-    ParallelParticleSwarms.ParallelPSOKernel(100, backend = backend),
-    maxiters = 100
-)
-@show sol.objective
-
-@time sol = Optimization.solve(
-    prob,
-    ParallelParticleSwarms.HybridPSO(; backend = backend),
-    local_maxiters = 30
-)
-@show sol.objective
-
-@time sol = Optimization.solve(
-    prob,
-    ParallelParticleSwarms.HybridPSO(;
-        local_opt = ParallelParticleSwarms.BFGS(), backend = backend
-    ),
-    local_maxiters = 30
-)
-@show sol.objective

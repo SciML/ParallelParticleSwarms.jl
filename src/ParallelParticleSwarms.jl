@@ -23,7 +23,9 @@ import SciMLBase
 import SciMLBase: ImmutableNonlinearProblem, NonlinearFunction, OptimizationFunction,
     OptimizationProblem, OptimizationStats, init, remake, reinit!, solve, solve!
 import Setfield: @set!
-import SimpleNonlinearSolve: SimpleBroyden, SimpleLimitedMemoryBroyden
+import SimpleNonlinearSolve: SimpleBroyden
+import SimpleOptimization
+import SimpleOptimization: SimpleLBFGS
 import StaticArrays
 import StaticArrays: @SArray, MVector, SArray, SVector
 
@@ -92,11 +94,12 @@ include("./kernels.jl")
 include("./lowerlevel_solve.jl")
 include("init.jl")
 include("./solve.jl")
+include("./lbfgs.jl")
 include("./bfgs.jl")
 include("./hybrid.jl")
 include("./precompilation.jl")
 
 export ParallelPSOKernel,
-    ParallelSyncPSOKernel, ParallelPSOArray, SerialPSO, PSOAlgorithm, HybridPSO, LBFGS, BFGS,
-    OptimizationProblem, solve, pso_solve
+    ParallelSyncPSOKernel, ParallelPSOArray, SerialPSO, PSOAlgorithm, HybridPSO,
+    SimpleLBFGS, BFGS, OptimizationProblem, solve, pso_solve
 end
