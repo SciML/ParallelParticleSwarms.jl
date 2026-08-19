@@ -10,6 +10,7 @@ run_tests(;
 
         @safetestset "Regression tests" include("./regression.jl")
         @safetestset "Reinitialization tests" include("./reinit.jl")
+        @safetestset "SimpleLBFGS hybrid polish" include("./lbfgs.jl")
         @safetestset "Algorithm interface tests" include("./interface.jl")
 
         #TODO: Current throws warning for redefinition with the use of @testset multiple times. Migrate to TestItemRunners.jl
@@ -18,8 +19,6 @@ run_tests(;
             @testset "$(BACKEND) optimizers tests" include("./gpu.jl")
             GC.gc(true)
             @testset "$(BACKEND) optimizers with constraints tests" include("./constraints.jl")
-            GC.gc(true)
-            @testset "$(BACKEND) hybrid optimizers" include("./lbfgs.jl")
         end
     end,
     qa = (; env = joinpath(@__DIR__, "qa"), body = joinpath(@__DIR__, "qa", "qa.jl")),

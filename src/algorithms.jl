@@ -215,23 +215,6 @@ SciMLBase.allowsbounds(::PSOAlgorithm) = true
 SciMLBase.allowsconstraints(::PSOAlgorithm) = true
 
 """
-    LBFGS(; threshold = 10)
-
-Local limited-memory Broyden refinement used by [`HybridPSO`](@ref).
-
-# Keywords
-
-- `threshold`: Maximum number of secant updates retained by the local solver.
-"""
-struct LBFGS
-    threshold::Int
-end
-
-function LBFGS(; threshold = 10)
-    return LBFGS(threshold)
-end
-
-"""
     BFGS()
 
 Local Broyden refinement used by [`HybridPSO`](@ref).
@@ -240,15 +223,16 @@ struct BFGS end
 
 """
     HybridPSO(; backend = CPU(), pso = ParallelPSOKernel(100; global_update = false, backend),
-        local_opt = LBFGS())
+        local_opt = SimpleLBFGS())
 
-Run a particle-swarm search followed by local Broyden refinement.
+Run a particle-swarm search followed by local refinement.
 
 # Keywords
 
 - `backend`: KernelAbstractions backend used by the particle-swarm stage.
 - `pso`: Particle-swarm algorithm used to generate local starting points.
-- `local_opt`: [`LBFGS`](@ref) or [`BFGS`](@ref) local refinement algorithm.
+- `local_opt`: `SimpleLBFGS` (projected Strong-Wolfe L-BFGS from
+  SimpleOptimization.jl) or [`BFGS`](@ref) local refinement algorithm.
 """
 struct HybridPSO{Backend, LocalOpt} <: HybridPSOAlgorithm{LocalOpt}
     pso::PSOAlgorithm
@@ -259,7 +243,7 @@ end
 function HybridPSO(;
         backend = CPU(),
         pso = ParallelParticleSwarms.ParallelPSOKernel(100; global_update = false, backend),
-        local_opt = LBFGS()
+        local_opt = SimpleLBFGS()
     )
     return HybridPSO(pso, local_opt, backend)
 end

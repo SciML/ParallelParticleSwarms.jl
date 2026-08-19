@@ -65,7 +65,7 @@ sol = solve(
             global_update = false,
             backend = CUDABackend()
         ),
-        local_opt = ParallelParticleSwarms.LBFGS()
+        local_opt = SimpleLBFGS()
     ), maxiters = 500,
     local_maxiters = 30
 )
@@ -210,7 +210,7 @@ for n_particles in Ns
                 global_update = false,
                 backend = CUDABackend()
             ),
-            local_opt = ParallelParticleSwarms.LBFGS()
+            local_opt = SimpleLBFGS()
         ), maxiters = 500,
         local_maxiters = 30
     )
@@ -224,7 +224,7 @@ for n_particles in Ns
                 global_update = false,
                 backend = CUDABackend()
             ),
-            local_opt = ParallelParticleSwarms.LBFGS()
+            local_opt = SimpleLBFGS()
         ), maxiters = 500,
         local_maxiters = 30
     )
@@ -363,13 +363,13 @@ using Statistics
 #     sol = solve(prob,
 #         ParallelParticleSwarms.HybridPSO(; backend = CUDABackend(),
 #         pso = ParallelParticleSwarms.ParallelPSOKernel(n_particles; global_update = false, backend = CUDABackend()),
-#         local_opt = ParallelParticleSwarms.LBFGS()), maxiters = 500,
+#         local_opt = SimpleLBFGS()), maxiters = 500,
 #         local_maxiters = 30)
 
 #     el_time = @elapsed solve(prob,
 #     ParallelParticleSwarms.HybridPSO(; backend = CUDABackend(),
 #     pso = ParallelParticleSwarms.ParallelPSOKernel(n_particles; global_update = false, backend = CUDABackend()),
-#     local_opt = ParallelParticleSwarms.LBFGS()), maxiters = 500,
+#     local_opt = SimpleLBFGS()), maxiters = 500,
 #     local_maxiters = 30)
 
 #     push!(gpu_hybrid_times_total, el_time)

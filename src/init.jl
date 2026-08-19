@@ -143,7 +143,7 @@ end
 function SciMLBase.init(
         prob::OptimizationProblem, opt::HybridPSO{Backend, LocalOpt}, args...;
         kwargs...
-    ) where {Backend, LocalOpt <: Union{LBFGS, BFGS}}
+    ) where {Backend, LocalOpt <: Union{SimpleLBFGS, BFGS}}
     psoalg = opt.pso
     backend = opt.backend
 
@@ -161,7 +161,7 @@ end
 function reinit_cache!(
         cache::HybridPSOCache,
         opt::HybridPSO{Backend, LocalOpt}
-    ) where {Backend, LocalOpt <: Union{LBFGS, BFGS}}
+    ) where {Backend, LocalOpt <: Union{SimpleLBFGS, BFGS}}
     reinit!(cache.pso_cache)
     fill!(cache.start_points, zero(eltype(cache.start_points)))
     return nothing

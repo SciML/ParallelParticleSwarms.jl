@@ -1,7 +1,7 @@
 using SciMLTesting, ParallelParticleSwarms, Test
 using JET
 
-const REEXPORTS = (:OptimizationProblem, :solve)
+const REEXPORTS = (:OptimizationProblem, :SimpleLBFGS, :solve)
 
 run_qa(
     ParallelParticleSwarms;
@@ -35,6 +35,8 @@ run_qa(
                 :evaluate_f!!,             # NonlinearSolveBase.Utils internal
                 :gradient,                 # ForwardDiff, no `public` declarations
                 :sacollect,                # StaticArrays, no `public` declarations
+                :_lbfgs,                   # SimpleOptimization kernel core, not yet public
+                :__get_threshold,          # SimpleOptimization, not yet public
             ),
         ),
     ),

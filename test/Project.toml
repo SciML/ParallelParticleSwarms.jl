@@ -1,4 +1,6 @@
 [deps]
+BlackBoxOptimizationBenchmarking = "4552ee2b-11da-5aef-8e78-0d48532001f1"
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
@@ -12,6 +14,8 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
+BlackBoxOptimizationBenchmarking = "2"
+ForwardDiff = "0.10, 1.3"
 JET = "0.9, 0.10, 0.11, 0.12"
 KernelAbstractions = "0.9"
 Optimization = "4.1, 5.2"
