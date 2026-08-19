@@ -1,8 +1,10 @@
 using ParallelParticleSwarms, Optimization, StaticArrays, KernelAbstractions, Test
 
 @testset "SimpleLBFGS hybrid local polish" begin
-    function _solve_hybrid(f, x0, p = nothing; lb = nothing, ub = nothing,
-            maxiters = 50, local_maxiters = 200)
+    function _solve_hybrid(
+            f, x0, p = nothing; lb = nothing, ub = nothing,
+            maxiters = 50, local_maxiters = 200
+        )
         n = length(x0)
         optf = OptimizationFunction{false}(f, Optimization.AutoForwardDiff())
         u0 = SVector{n, Float64}(x0)
@@ -62,8 +64,10 @@ using ParallelParticleSwarms, Optimization, StaticArrays, KernelAbstractions, Te
     @test sol.objective < 1.0e-8
     @test all(-5 .≤ sol.u) && all(sol.u .≤ 5)
 
-    sol = _solve_hybrid(boundary_quadratic, [1.5]; lb = [0.0], ub = [2.0],
-        maxiters = 20, local_maxiters = 50)
+    sol = _solve_hybrid(
+        boundary_quadratic, [1.5]; lb = [0.0], ub = [2.0],
+        maxiters = 20, local_maxiters = 50
+    )
     @test sol.u[1] ≈ 0.0 atol = 1.0e-6
     @test sol.objective ≈ 1.0 atol = 1.0e-6
 end
