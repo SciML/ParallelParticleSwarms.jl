@@ -1,7 +1,17 @@
 using SciMLTesting, ParallelParticleSwarms, Test
 using JET
 
-const REEXPORTS = (:OptimizationProblem, :SimpleLBFGS, :solve)
+# The SciML common optimization interface ParallelParticleSwarms deliberately reexports
+# so that `using ParallelParticleSwarms` is enough to build a problem, solve it (either
+# directly or through the `init`/`reinit!`/`solve!` cache workflow) and inspect the
+# result. Owned and documented upstream; kept in sync with the reexport `export` block
+# in src/ParallelParticleSwarms.jl. `SimpleLBFGS` is the SimpleOptimization local
+# algorithm `HybridPSO` takes.
+const REEXPORTS = (
+    :NullParameters, :OptimizationFunction, :OptimizationProblem, :OptimizationSolution,
+    :OptimizationStats, :ReturnCode, :SimpleLBFGS, :init, :reinit!, :remake, :solve,
+    :solve!, :successful_retcode,
+)
 
 run_qa(
     ParallelParticleSwarms;
