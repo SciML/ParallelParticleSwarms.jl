@@ -22,6 +22,12 @@ import QuasiMonteCarlo: LatinHypercubeSample, SamplingAlgorithm
 import SciMLBase
 import SciMLBase: ImmutableNonlinearProblem, NonlinearFunction, OptimizationFunction,
     OptimizationProblem, OptimizationStats, init, remake, reinit!, solve, solve!
+# The rest of the SciML common optimization interface that ParallelParticleSwarms
+# reexports (see the second `export` below), so that `using ParallelParticleSwarms` on
+# its own is enough to build an `OptimizationProblem`, run the
+# `init`/`reinit!`/`solve!` cache workflow, and inspect the result. Everything stays
+# owned and documented upstream in SciMLBase.
+import SciMLBase: NullParameters, OptimizationSolution, ReturnCode, successful_retcode
 import Setfield: @set!
 import SimpleNonlinearSolve: SimpleBroyden
 import SimpleOptimization
@@ -101,5 +107,11 @@ include("./precompilation.jl")
 
 export ParallelPSOKernel,
     ParallelSyncPSOKernel, ParallelPSOArray, SerialPSO, PSOAlgorithm, HybridPSO,
-    SimpleLBFGS, BFGS, OptimizationProblem, solve, pso_solve
+    SimpleLBFGS, BFGS, pso_solve
+
+# Reexported SciML common optimization interface; approved via `reexports_allow` in
+# test/qa/qa.jl.
+export NullParameters, OptimizationFunction, OptimizationProblem, OptimizationSolution,
+    OptimizationStats, ReturnCode, init, reinit!, remake, solve, solve!,
+    successful_retcode
 end
