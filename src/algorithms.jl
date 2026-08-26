@@ -38,7 +38,7 @@ end
 
 """
     ParallelPSOKernel(num_particles; global_update = true, backend = CPU(),
-        θ = θ_default, γ = γ_default, h = sqrt)
+        θ = θ_default, γ = γ_default, h = sqrt, workgroupsize = 256)
 
 Particle Swarm Optimization that launches a KernelAbstractions kernel for
 parallel particle updates.
@@ -58,6 +58,7 @@ successful GPU compilation.
 - `θ`: PSO coefficient schedule.
 - `γ`: PSO velocity update coefficient schedule.
 - `h`: Transformation applied in the update rule.
+- `workgroupsize`: KernelAbstractions workgroup size. Defaults to 256.
 
 # Examples
 
@@ -82,11 +83,12 @@ struct ParallelPSOKernel{Backend, T, G, H} <: PSOAlgorithm
     θ::T
     γ::G
     h::H
+    workgroupsize::Int
 end
 
 """
     ParallelSyncPSOKernel(num_particles; backend = CPU(), θ = θ_default,
-        γ = γ_default, h = sqrt)
+        γ = γ_default, h = sqrt, workgroupsize = 256)
 
 Particle Swarm Optimization that updates particles in parallel and synchronizes
 after each generation to compute the global best position.
@@ -101,6 +103,7 @@ after each generation to compute the global best position.
 - `θ`: PSO coefficient schedule.
 - `γ`: PSO velocity update coefficient schedule.
 - `h`: Transformation applied in the update rule.
+- `workgroupsize`: KernelAbstractions workgroup size. Defaults to 256.
 
 # Examples
 
@@ -118,6 +121,7 @@ struct ParallelSyncPSOKernel{Backend, T, G, H} <: PSOAlgorithm
     θ::T
     γ::G
     h::H
+    workgroupsize::Int
 end
 
 """
@@ -191,16 +195,20 @@ end
 
 function ParallelPSOKernel(
         num_particles::Int;
-        global_update = true, backend = CPU(), θ = θ_default, γ = γ_default, h = sqrt
+        global_update = true, backend = CPU(), θ = θ_default, γ = γ_default, h = sqrt,
+        workgroupsize = 256
     )
-    return ParallelPSOKernel(num_particles, global_update, backend, θ, γ, h)
+    return ParallelPSOKernel(
+        num_particles, global_update, backend, θ, γ, h, workgroupsize
+    )
 end
 
 function ParallelSyncPSOKernel(
         num_particles::Int;
-        backend = CPU(), θ = θ_default, γ = γ_default, h = sqrt
+        backend = CPU(), θ = θ_default, γ = γ_default, h = sqrt,
+        workgroupsize = 256
     )
-    return ParallelSyncPSOKernel(num_particles, backend, θ, γ, h)
+    return ParallelSyncPSOKernel(num_particles, backend, θ, γ, h, workgroupsize)
 end
 
 function ParallelPSOArray(num_particles::Int; θ = θ_default, γ = γ_default, h = sqrt)

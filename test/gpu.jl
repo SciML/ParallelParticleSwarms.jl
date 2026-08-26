@@ -57,6 +57,31 @@ include("./utils.jl")
     @test sol.objective < 6.0e-4
 end
 
+@testset "reduction is dimension-independent" begin
+    Random.seed!(1234)
+    n_particles = 512
+    for D in (3, 10, 30)
+        lb = SVector{D, Float64}(ntuple(_ -> -5.0, Val(D)))
+        ub = SVector{D, Float64}(ntuple(_ -> 5.0, Val(D)))
+        x0 = zero(lb)
+        optf = OptimizationFunction{false}((x, p) -> sum(abs2, x), SciMLBase.NoAD())
+        prob = OptimizationProblem{false}(optf, x0, nothing; lb, ub)
+        for opt in (
+                ParallelSyncPSOKernel(n_particles; backend),
+                ParallelPSOKernel(n_particles; backend, global_update = true),
+            )
+            sol = solve(prob, opt; maxiters = 100)
+            @test sol.objective < 1.0e-2
+        end
+        sol = solve(
+            prob,
+            ParallelPSOKernel(n_particles; backend, workgroupsize = 1024);
+            maxiters = 20
+        )
+        @test isfinite(sol.objective)
+    end
+end
+
 if GROUP == "CUDA"
     @testset "HybridPSO L-BFGS BBOB F8 CUDA" begin
         Random.seed!(42)
