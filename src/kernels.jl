@@ -47,7 +47,6 @@ end
     @uniform gs = @groupsize()[1]
     @uniform n = length(gpu_particles)
 
-    # Shared memory holds (cost, global index) only — independent of dimension.
     queue_cost = @localmem T2 (gs)
     queue_idx = @localmem Int32 (gs)
     queue_num = @localmem UInt32 1
@@ -122,7 +121,6 @@ end
     @uniform gs = @groupsize()[1]
     @uniform n = length(gpu_particles)
 
-    # Shared memory holds (cost, local index) only — independent of dimension.
     costs = @localmem T2 (gs)
     idxs = @localmem Int32 (gs)
 
@@ -137,17 +135,17 @@ end
         @inbounds idxs[tidx] = Int32(tidx)
     end
 
-    stride = gs ÷ 2
-
-    while stride >= 1
+    s = gs
+    while s > 1
+        half = cld(s, 2)
         @synchronize
-        if tidx <= stride
-            @inbounds if costs[tidx + stride] < costs[tidx]
-                costs[tidx] = costs[tidx + stride]
-                idxs[tidx] = idxs[tidx + stride]
+        if tidx <= s - half
+            @inbounds if costs[tidx + half] < costs[tidx]
+                costs[tidx] = costs[tidx + half]
+                idxs[tidx] = idxs[tidx + half]
             end
         end
-        stride = stride ÷ 2
+        s = half
     end
 
     @synchronize

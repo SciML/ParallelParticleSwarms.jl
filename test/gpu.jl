@@ -73,12 +73,35 @@ end
             sol = solve(prob, opt; maxiters = 100)
             @test sol.objective < 1.0e-2
         end
-        sol = solve(
-            prob,
-            ParallelPSOKernel(n_particles; backend, workgroupsize = 1024);
-            maxiters = 20
-        )
-        @test isfinite(sol.objective)
+        for opt in (
+                ParallelSyncPSOKernel(1024; backend, workgroupsize = 1024),
+                ParallelPSOKernel(
+                    1024; backend, global_update = true, workgroupsize = 1024
+                ),
+            )
+            sol = solve(prob, opt; maxiters = 20)
+            @test isfinite(sol.objective)
+        end
+    end
+end
+
+@testset "block argmin matches brute force" begin
+    Random.seed!(1234)
+    D = 10
+    lb = SVector{D, Float64}(ntuple(_ -> -5.0, Val(D)))
+    ub = SVector{D, Float64}(ntuple(_ -> 5.0, Val(D)))
+    x0 = zero(lb)
+    optf = OptimizationFunction{false}((x, p) -> sum(abs2, x), SciMLBase.NoAD())
+    prob = OptimizationProblem{false}(optf, x0, nothing; lb, ub)
+    for n in (10, 100, 5000),
+            opt_f in (
+                n -> ParallelSyncPSOKernel(n; backend),
+                n -> ParallelPSOKernel(n; backend, global_update = true),
+            )
+        cache = init(prob, opt_f(n))
+        sol = solve!(cache; maxiters = 5)
+        best = minimum(p.best_cost for p in Array(cache.particles))
+        @test sol.objective == best
     end
 end
 

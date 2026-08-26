@@ -59,6 +59,8 @@ successful GPU compilation.
 - `γ`: PSO velocity update coefficient schedule.
 - `h`: Transformation applied in the update rule.
 - `workgroupsize`: KernelAbstractions workgroup size. Defaults to 256.
+    With `global_update=true`, each block queues improving particles in shared
+    memory and updates the global best under a lock.
 
 # Examples
 
@@ -68,12 +70,6 @@ using ParallelParticleSwarms
 
 alg = ParallelPSOKernel(100; backend = CPU(), global_update = false)
 ```
-
-# Limitations
-
-Running the optimization with `global_update=true` updates the global best positions with possible thread races.
-This is the price to be paid to fuse all the updates into a single kernel. Techniques such as queue lock and atomic
-updates can be used to fix this.
 
 """
 struct ParallelPSOKernel{Backend, T, G, H} <: PSOAlgorithm
