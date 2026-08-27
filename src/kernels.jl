@@ -135,17 +135,17 @@ end
         @inbounds idxs[tidx] = Int32(tidx)
     end
 
-    s = gs
-    while s > 1
-        half = cld(s, 2)
+    nactive = gs
+    while nactive > 1
+        half = cld(nactive, 2)
         @synchronize
-        if tidx <= s - half
+        if tidx <= nactive - half
             @inbounds if costs[tidx + half] < costs[tidx]
                 costs[tidx] = costs[tidx + half]
                 idxs[tidx] = idxs[tidx + half]
             end
         end
-        s = half
+        nactive = half
     end
 
     @synchronize
