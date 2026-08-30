@@ -32,10 +32,10 @@ end
     position = StaticArrays.sacollect(
         T,
         ifelse(
-                abs(prob.u0[i]) > 0,
-                prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i]),
-                rand(eltype(prob.u0))
-            ) for i in 1:dim
+            abs(prob.u0[i]) > 0,
+            prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i]),
+            rand(eltype(prob.u0))
+        ) for i in 1:dim
     )
 
     velocity = zero(T)
@@ -123,9 +123,9 @@ function init_particles!(particles, prob, opt, ::Type{T}) where {T <: SArray}
         gbest_position = StaticArrays.sacollect(
             T,
             ifelse(
-                    abs(prob.u0[i]) > 0, prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i]),
-                    rand(eltype(prob.u0))
-                ) for i in 1:dim
+                abs(prob.u0[i]) > 0, prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i]),
+                rand(eltype(prob.u0))
+            ) for i in 1:dim
         )
     else
         gbest_position = StaticArrays.sacollect(T, uniform_itr(dim, lb, ub))
@@ -151,10 +151,10 @@ function init_particles!(particles, prob, opt, ::Type{T}) where {T <: SArray}
             position = StaticArrays.sacollect(
                 T,
                 ifelse(
-                        abs(prob.u0[i]) > 0,
-                        prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i]),
-                        rand(eltype(prob.u0))
-                    ) for i in 1:dim
+                    abs(prob.u0[i]) > 0,
+                    prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i]),
+                    rand(eltype(prob.u0))
+                ) for i in 1:dim
             )
         else
             @inbounds position = StaticArrays.sacollect(T, positions[j, i] for j in 1:dim)
@@ -198,9 +198,9 @@ function init_particles(prob, opt, ::Type{T}) where {T <: SArray}
         gbest_position = StaticArrays.sacollect(
             T,
             ifelse(
-                    abs(prob.u0[i]) > 0, prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i]),
-                    rand(eltype(prob.u0))
-                ) for i in 1:dim
+                abs(prob.u0[i]) > 0, prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i]),
+                rand(eltype(prob.u0))
+            ) for i in 1:dim
         )
     else
         gbest_position = StaticArrays.sacollect(T, uniform_itr(dim, lb, ub))
@@ -222,10 +222,10 @@ function init_particles(prob, opt, ::Type{T}) where {T <: SArray}
             @inbounds position = StaticArrays.sacollect(
                 T,
                 ifelse(
-                        abs(prob.u0[j]) > 0,
-                        prob.u0[j] + rand(eltype(prob.u0)) * abs(prob.u0[j]),
-                        rand(eltype(prob.u0))
-                    ) for j in 1:dim
+                    abs(prob.u0[j]) > 0,
+                    prob.u0[j] + rand(eltype(prob.u0)) * abs(prob.u0[j]),
+                    rand(eltype(prob.u0))
+                ) for j in 1:dim
             )
         else
             @inbounds position = StaticArrays.sacollect(T, positions[j, i] for j in 1:dim)
