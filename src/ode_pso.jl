@@ -15,8 +15,8 @@
         @set! particle.velocity = updated_velocity
         @set! particle.position = particle.position + particle.velocity
 
-        update_pos = max(particle.position, lb)
-        update_pos = min(update_pos, ub)
+        update_pos = max.(particle.position, lb)
+        update_pos = min.(update_pos, ub)
 
         @set! particle.position = update_pos
         @inbounds gpu_particles[i] = particle

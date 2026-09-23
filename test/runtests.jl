@@ -12,6 +12,7 @@ run_tests(;
         @safetestset "Reinitialization tests" include("./reinit.jl")
         @safetestset "SimpleLBFGS hybrid polish" include("./lbfgs.jl")
         @safetestset "Algorithm interface tests" include("./interface.jl")
+        @safetestset "ODE parameter estimation particle update" include("./ode_pso.jl")
 
         #TODO: Current throws warning for redefinition with the use of @testset multiple times. Migrate to TestItemRunners.jl
         return @testset for BACKEND in unique(("CPU", CI_GROUP))
