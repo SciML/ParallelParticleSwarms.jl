@@ -71,7 +71,10 @@ function SciMLBase.solve!(
     x0s = sol_pso.original
     n = length(x0s)
     result = similar(x0s)
+    # Entries a thread never writes (e.g. a kernel cut short by a display
+    # watchdog) must not win the findmin below.
     result_fx = KernelAbstractions.allocate(opt.backend, T, n)
+    fill!(result_fx, T(Inf))
 
     t0 = time()
     simplebfgs_run!(opt.backend)(
@@ -122,7 +125,10 @@ function SciMLBase.solve!(
     particles = cache.pso_cache.particles
     n = length(particles)
     length(result) == n || throw(DimensionMismatch("particle and result counts must match"))
+    # Entries a thread never writes (e.g. a kernel cut short by a display
+    # watchdog) must not win the findmin below.
     result_fx = KernelAbstractions.allocate(opt.backend, T, n)
+    fill!(result_fx, T(Inf))
 
     t0 = time()
     grad_f = as_svector_grad(ForwardDiffGradient(f_raw))
