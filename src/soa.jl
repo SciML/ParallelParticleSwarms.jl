@@ -37,6 +37,7 @@ function Base.minimum(p::SoAParticles{T1}) where {T1}
     _, i = findmin(view(p.data, :, 3length(T1) + 2))
     return SoAParticles{T1}(Array(view(p.data, i:i, :)))[1]
 end
+Base.Array(p::SoAParticles{T1}) where {T1} = collect(SoAParticles{T1}(Array(p.data)))
 
 @kernel function soa_positions!(out, particles)
     i = @index(Global, Linear)
