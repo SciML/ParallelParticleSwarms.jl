@@ -95,6 +95,7 @@ end
 
 include("./algorithms.jl")
 include("./utils.jl")
+include("./soa.jl")
 include("./ode_pso.jl")
 include("./kernels.jl")
 include("./lowerlevel_solve.jl")

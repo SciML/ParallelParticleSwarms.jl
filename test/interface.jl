@@ -1,5 +1,5 @@
 using ParallelParticleSwarms
-import ParallelParticleSwarms: PSOAlgorithm, pso_solve
+import ParallelParticleSwarms: PSOAlgorithm, pso_solve, SoAParticles, SPSOParticle, SVector
 using Test
 
 struct MockPSO <: PSOAlgorithm end
@@ -17,4 +17,12 @@ end
     @test sol.u == prob.u0
     @test sol.objective == 5.0
     @test sol.original == [prob.u0]
+end
+
+@testset "SoAParticles getindex/setindex!/minimum" begin
+    ps = SoAParticles{SVector{2, Float64}}(zeros(3, 8))
+    q = SPSOParticle(SVector(1.0, 2.0), SVector(3.0, 4.0), 5.0, SVector(6.0, 7.0), -1.0)
+    ps[2] = q
+    @test ps[2] == q
+    @test minimum(ps) == q
 end

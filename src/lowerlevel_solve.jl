@@ -11,7 +11,7 @@ function vectorized_solve!(
         wdamp = 1.0f0,
         debug = false
     )
-    backend = get_backend(gpu_particles)
+    backend = opt.backend
 
     ws = pso_launch_workgroupsize(opt, length(gpu_particles))
     workgroupsize = (ws,)
@@ -80,7 +80,7 @@ function vectorized_solve!(
 
     ## Initialize stuff
 
-    backend = get_backend(gpu_particles)
+    backend = opt.backend
 
     ws = pso_launch_workgroupsize(opt, length(gpu_particles))
     kernel = update_particle_states!(backend, ws)
@@ -106,7 +106,7 @@ function vectorized_solve!(
         wdamp = 1.0f0,
         debug = false
     )
-    backend = get_backend(gpu_particles)
+    backend = opt.backend
 
     ws = pso_launch_workgroupsize(opt, length(gpu_particles))
     kernel = update_particle_states_async!(backend, ws)

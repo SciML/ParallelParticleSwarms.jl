@@ -25,7 +25,7 @@ function SciMLBase.solve!(
     )
     t1 = time()
 
-    particles_positions = get_pos.(particles)
+    particles_positions = get_positions(particles)
     return SciMLBase.build_solution(
         SciMLBase.DefaultOptimizationCache(prob.f, prob.p), opt,
         gbest.position, prob.f(gbest.position, prob.p), original = particles_positions,
@@ -50,7 +50,7 @@ function SciMLBase.solve!(
     )
     t1 = time()
 
-    particles_positions = get_pos.(particles)
+    particles_positions = get_positions(particles)
     return SciMLBase.build_solution(
         SciMLBase.DefaultOptimizationCache(prob.f, prob.p), opt,
         gbest.position, prob.f(gbest.position, prob.p), original = particles_positions,

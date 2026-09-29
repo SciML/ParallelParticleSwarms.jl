@@ -30,3 +30,5 @@ sol = solve(prob,
     ParallelSyncPSOKernel(1000, backend = CUDA.CUDABackend()),
     maxiters = 500)
 ```
+
+For best GPU performance, pass `CUDA.CUDABackend(always_inline = true)`: it inlines the objective's call chain into the kernel, so each thread no longer copies the whole `prob` (including the objective closure) to its stack.

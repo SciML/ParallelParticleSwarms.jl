@@ -63,9 +63,7 @@ function SciMLBase.init(
     lb, ub = check_init_bounds(prob)
     prob = remake(prob; lb = lb, ub = ub)
 
-    particles = KernelAbstractions.allocate(
-        opt.backend, SPSOParticle{typeof(prob.u0), eltype(typeof(prob.u0))}, opt.num_particles
-    )
+    particles = particle_storage(opt.backend, typeof(prob.u0), opt.num_particles)
 
     _sampler = if lb === nothing || ub === nothing || (all(isinf, lb) && all(isinf, ub))
         GPUUnboundedSampler()
@@ -95,9 +93,7 @@ function SciMLBase.init(
     lb, ub = check_init_bounds(prob)
     prob = remake(prob; lb = lb, ub = ub)
 
-    particles = KernelAbstractions.allocate(
-        opt.backend, SPSOParticle{typeof(prob.u0), eltype(typeof(prob.u0))}, opt.num_particles
-    )
+    particles = particle_storage(opt.backend, typeof(prob.u0), opt.num_particles)
 
     _sampler = if lb === nothing || ub === nothing || (all(isinf, lb) && all(isinf, ub))
         GPUUnboundedSampler()
