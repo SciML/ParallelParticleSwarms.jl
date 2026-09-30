@@ -400,9 +400,18 @@ end
     )
     return θ isa SVector ? SVector(res) : res
 end
+# SVectors are isbits, so they can be `Active` and differentiated without the
+# MVector shadow above; `autodiff_deferred` keeps this callable inside GPU kernels.
+@inline function (g::EnzymeGradient)(θ::SVector, p)
+    return autodiff_deferred(
+        Reverse, Const(_enzyme_scalar_f), Active, Const(g.f), Active(θ), Const(p)
+    )[1][2]
+end
 
 @inline instantiate_gradient(f, ::AutoForwardDiff) = ForwardDiffGradient(f)
 @inline instantiate_gradient(f, ::AutoEnzyme) = EnzymeGradient(f)
+# Problems without an AD type (e.g. `NoAD()`) fall back to ForwardDiff.
+@inline instantiate_gradient(f, _) = ForwardDiffGradient(f)
 
 @inline as_svector(x::SVector) = x
 @inline as_svector(x) = SVector(x)
