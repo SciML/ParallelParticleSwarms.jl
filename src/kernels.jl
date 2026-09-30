@@ -1,11 +1,22 @@
+# PSO acceleration coefficients. Kept as constants rather than `@kernel` keyword arguments:
+# a keyword argument splits the kernel into a separate, non-inlined body function, and
+# passing `prob` to it makes every GPU thread copy `prob` from parameter space onto its stack.
+const PSO_C1 = 1.4962f0
+const PSO_C2 = 1.4962f0
+
+# StaticArrays' `rand(::Type{<:SArray})` is not inlined on the GPU, so each call returns its
+# result through a stack slot.
+@inline rand_static(::Type{S}) where {S <: SArray} =
+    S(ntuple(_ -> rand(eltype(S)), Val(length(S))))
+
 @inline function update_particle_state(particle, prob, gbest, w, c1, c2, iter, opt)
     updated_velocity = w .* particle.velocity .+
-        c1 .* rand(typeof(particle.velocity)) .*
+        c1 .* rand_static(typeof(particle.velocity)) .*
         (
         particle.best_position -
             particle.position
     ) .+
-        c2 .* rand(typeof(particle.velocity)) .*
+        c2 .* rand_static(typeof(particle.velocity)) .*
         (gbest.position - particle.position)
 
     @set! particle.velocity = updated_velocity
@@ -38,8 +49,7 @@ end
 @kernel function update_particle_states!(
         prob,
         gpu_particles::AbstractArray{SPSOParticle{T1, T2}}, gbest_ref, w,
-        opt::ParallelPSOKernel, lock::AbstractArray{UInt32}; c1 = 1.4962f0,
-        c2 = 1.4962f0
+        opt::ParallelPSOKernel, lock::AbstractArray{UInt32}
     ) where {T1, T2}
     i = @index(Global, Linear)
     tidx = @index(Local, Linear)
@@ -68,8 +78,8 @@ end
             prob,
             gbest_ref[1],
             w,
-            c1,
-            c2,
+            PSO_C1,
+            PSO_C2,
             i,
             opt
         )
@@ -111,8 +121,7 @@ end
 @kernel function update_particle_states!(
         prob,
         gpu_particles::AbstractArray{SPSOParticle{T1, T2}}, block_particles, gbest, w,
-        opt::ParallelSyncPSOKernel; c1 = 1.4962f0,
-        c2 = 1.4962f0
+        opt::ParallelSyncPSOKernel
     ) where {T1, T2}
     i = @index(Global, Linear)
     tidx = @index(Local, Linear)
@@ -129,7 +138,7 @@ end
 
     if i <= n
         @inbounds particle = gpu_particles[i]
-        particle = update_particle_state(particle, prob, gbest, w, c1, c2, i, opt)
+        particle = update_particle_state(particle, prob, gbest, w, PSO_C1, PSO_C2, i, opt)
         @inbounds gpu_particles[i] = particle
         @inbounds costs[tidx] = particle.best_cost
         @inbounds idxs[tidx] = Int32(tidx)
@@ -170,14 +179,13 @@ end
 # https://github.com/JuliaGPU/KernelAbstractions.jl/issues/330
 @kernel function update_particle_states!(
         prob, gpu_particles, gbest, w,
-        opt::ParallelSyncPSOKernel{Backend, T, G, H}; c1 = 1.4962f0,
-        c2 = 1.4962f0
+        opt::ParallelSyncPSOKernel{Backend, T, G, H}
     ) where {Backend <: CPU, T, G, H}
     i = @index(Global, Linear)
 
     @inbounds particle = gpu_particles[i]
 
-    particle = update_particle_state(particle, prob, gbest, w, c1, c2, i, opt)
+    particle = update_particle_state(particle, prob, gbest, w, PSO_C1, PSO_C2, i, opt)
 
     @inbounds gpu_particles[i] = particle
 end
@@ -186,9 +194,7 @@ end
         prob,
         gpu_particles,
         gbest_ref,
-        w, wdamp, maxiters, opt;
-        c1 = 1.4962f0,
-        c2 = 1.4962f0
+        w, wdamp, maxiters, opt
     )
     i = @index(Global, Linear)
 
@@ -200,7 +206,7 @@ end
 
         ## Run all generations
         for iter in 1:maxiters
-            particle = update_particle_state(particle, prob, gbest, w, c1, c2, iter, opt)
+            particle = update_particle_state(particle, prob, gbest, w, PSO_C1, PSO_C2, iter, opt)
             if particle.best_cost < gbest.cost
                 @set! gbest.position = particle.best_position
                 @set! gbest.cost = particle.best_cost
