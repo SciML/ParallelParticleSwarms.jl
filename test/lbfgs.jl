@@ -48,8 +48,8 @@ using ParallelParticleSwarms, Optimization, SciMLBase, StaticArrays, KernelAbstr
     @test sol.objective < 1.0e-8
     @test all(-2 .≤ sol.u) && all(sol.u .≤ 2)
 
-    @testset "adtype = $(nameof(typeof(adtype)))" for adtype in
-            (Optimization.AutoEnzyme(), SciMLBase.NoAD())
+    adtypes = (Optimization.AutoEnzyme(), SciMLBase.NoAD())
+    @testset "adtype = $(nameof(typeof(adtype)))" for adtype in adtypes
         sol = _solve_hybrid(rosen2, [-1.2, 1.0], [1.0, 100.0]; adtype)
         @test sol.u ≈ [1.0, 1.0] atol = 1.0e-4
         @test sol.objective < 1.0e-8
