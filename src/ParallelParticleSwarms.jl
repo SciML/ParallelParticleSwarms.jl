@@ -4,7 +4,7 @@ import Adapt
 import Adapt: adapt
 import ADTypes: AutoEnzyme, AutoForwardDiff
 import Atomix: @atomic, @atomicreplace
-import Enzyme: autodiff, Active, Reverse, Const, Duplicated, make_zero!
+import Enzyme: autodiff, autodiff_deferred, Active, Reverse, Const, Duplicated, make_zero!
 import DiffEqGPU: GPUTsit5, vectorized_solve, vectorized_asolve
 import ForwardDiff
 import KernelAbstractions

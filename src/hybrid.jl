@@ -65,7 +65,7 @@ function SciMLBase.solve!(
     d = length(prob.u0)
     lb, ub = _static_bounds(prob, Val(d), T)
 
-    grad_f = as_svector_grad(BoundedGrad(ForwardDiffGradient(f_raw), lb, ub))
+    grad_f = as_svector_grad(BoundedGrad(instantiate_gradient(f_raw, prob.f.adtype), lb, ub))
     nlalg = SimpleBroyden(; linesearch)
 
     x0s = sol_pso.original
@@ -131,7 +131,7 @@ function SciMLBase.solve!(
     fill!(result_fx, T(Inf))
 
     t0 = time()
-    grad_f = as_svector_grad(ForwardDiffGradient(f_raw))
+    grad_f = as_svector_grad(instantiate_gradient(f_raw, prob.f.adtype))
     linesearch isa StrongWolfeLineSearch ||
         throw(ArgumentError("HybridPSO with SimpleLBFGS requires a StrongWolfeLineSearch"))
     typed_linesearch = StrongWolfeLineSearch(;

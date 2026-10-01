@@ -1,12 +1,12 @@
-using ParallelParticleSwarms, Optimization, StaticArrays, KernelAbstractions, Test
+using ParallelParticleSwarms, Optimization, SciMLBase, StaticArrays, KernelAbstractions, Test
 
 @testset "SimpleLBFGS hybrid local polish" begin
     function _solve_hybrid(
             f, x0, p = nothing; lb = nothing, ub = nothing,
-            maxiters = 50, local_maxiters = 200
+            maxiters = 50, local_maxiters = 200, adtype = Optimization.AutoForwardDiff()
         )
         n = length(x0)
-        optf = OptimizationFunction{false}(f, Optimization.AutoForwardDiff())
+        optf = OptimizationFunction{false}(f, adtype)
         u0 = SVector{n, Float64}(x0)
         kwargs = NamedTuple()
         if lb !== nothing
@@ -47,6 +47,19 @@ using ParallelParticleSwarms, Optimization, StaticArrays, KernelAbstractions, Te
     @test sol.u ≈ [1.0, 1.0] atol = 1.0e-4
     @test sol.objective < 1.0e-8
     @test all(-2 .≤ sol.u) && all(sol.u .≤ 2)
+
+    adtypes = (Optimization.AutoEnzyme(), SciMLBase.NoAD())
+    @testset "adtype = $(nameof(typeof(adtype)))" for adtype in adtypes
+        sol = _solve_hybrid(rosen2, [-1.2, 1.0], [1.0, 100.0]; adtype)
+        @test sol.u ≈ [1.0, 1.0] atol = 1.0e-4
+        @test sol.objective < 1.0e-8
+
+        sol = _solve_hybrid(
+            rosen2, [0.0, 0.0], [1.0, 100.0]; adtype, lb = [-2.0, -2.0], ub = [2.0, 2.0]
+        )
+        @test sol.u ≈ [1.0, 1.0] atol = 1.0e-4
+        @test sol.objective < 1.0e-8
+    end
 
     sol = _solve_hybrid(beale, [1.0, 1.0])
     @test sol.u ≈ [3.0, 0.5] atol = 1.0e-4
