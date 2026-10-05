@@ -105,6 +105,55 @@ end
     end
 end
 
+@testset "local_best sub-swarms" begin
+    Random.seed!(1234)
+    D = 2
+    lb = SVector{D, Float64}(ntuple(_ -> -5.0, Val(D)))
+    ub = SVector{D, Float64}(ntuple(_ -> 5.0, Val(D)))
+    a = SVector{D, Float64}(ntuple(_ -> 3.0, Val(D)))
+    # Two equally deep minima at ±a: a global-best swarm settles in one, sub-swarms in both.
+    twowells(x, p) = min(sum(abs2, x - a), sum(abs2, x + a))
+    optf = OptimizationFunction{false}(twowells, SciMLBase.NoAD())
+    prob = OptimizationProblem{false}(optf, zero(lb), nothing; lb, ub)
+
+    n, ws = 1024, 64
+    function block_bests(cache)
+        particles = Array(cache.particles)
+        return [
+            minimum(particles[((b - 1) * ws + 1):min(b * ws, n)]).best_position
+                for b in 1:cld(n, ws)
+        ]
+    end
+    nwells(xs) = count(s -> any(x -> norm(x - s * a) < 0.1, xs), (1, -1))
+
+    cache = init(prob, ParallelSyncPSOKernel(n; backend, workgroupsize = ws, local_best = true))
+    sol = solve!(cache; maxiters = 200)
+    @test sol.objective == minimum(p.best_cost for p in Array(cache.particles))
+    @test sol.objective < 1.0e-6
+    @test nwells(block_bests(cache)) == 2
+
+    cache = init(prob, ParallelSyncPSOKernel(n; backend, workgroupsize = ws))
+    solve!(cache; maxiters = 200)
+    @test nwells(block_bests(cache)) == 1
+
+    # Chunked solves continue each block from its own best.
+    cache = init(prob, ParallelSyncPSOKernel(n; backend, workgroupsize = ws, local_best = true))
+    for _ in 1:10
+        solve!(cache; maxiters = 20)
+    end
+    @test nwells(block_bests(cache)) == 2
+
+    sol = solve(
+        prob,
+        ParallelParticleSwarms.HybridPSO(;
+            pso = ParallelSyncPSOKernel(n; backend, workgroupsize = ws, local_best = true),
+            backend,
+        );
+        maxiters = 50, local_maxiters = 50
+    )
+    @test sol.objective < 1.0e-8
+end
+
 if GROUP == "CUDA"
     @testset "HybridPSO L-BFGS BBOB F8 CUDA" begin
         Random.seed!(42)

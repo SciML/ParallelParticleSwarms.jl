@@ -19,11 +19,28 @@ function vectorized_solve!(
 
     update_particle_kernel = update_particle_states!(backend, workgroupsize)
 
-    block_particles = KernelAbstractions.allocate(
-        backend,
-        typeof(gbest),
-        cld(length(gpu_particles), ws)
-    )
+    nblocks = cld(length(gpu_particles), ws)
+    block_particles = KernelAbstractions.allocate(backend, typeof(gbest), nblocks)
+
+    if opt.local_best
+        # Each block follows its own best. Start from the particles' bests rather than
+        # `gbest`, so chunked `solve!` calls don't pull every block to one point.
+        social = KernelAbstractions.allocate(backend, typeof(gbest), nblocks)
+        update_block_bests!(backend)(social, gpu_particles, ws; ndrange = nblocks)
+        for i in 1:maxiters
+            update_particle_kernel(
+                prob,
+                gpu_particles, block_particles,
+                social,
+                w, opt;
+                ndrange = padded_ndrange
+            )
+            social, block_particles = block_particles, social
+            w = w * wdamp
+        end
+        return minimum(social), gpu_particles
+    end
+
     for i in 1:maxiters
         update_particle_kernel(
             prob,
@@ -51,13 +68,33 @@ function vectorized_solve!(
     backend = get_backend(gpu_particles)
 
     update_particle_kernel = update_particle_states!(backend)
+    ws = pso_launch_workgroupsize(opt, length(gpu_particles))
+
+    if opt.local_best
+        nblocks = cld(length(gpu_particles), ws)
+        social = KernelAbstractions.allocate(backend, typeof(gbest), nblocks)
+        block_bests_kernel = update_block_bests!(backend)
+        block_bests_kernel(social, gpu_particles, ws; ndrange = nblocks)
+        for i in 1:maxiters
+            update_particle_kernel(
+                prob,
+                gpu_particles,
+                social,
+                w, opt, ws;
+                ndrange = length(gpu_particles)
+            )
+            block_bests_kernel(social, gpu_particles, ws; ndrange = nblocks)
+            w = w * wdamp
+        end
+        return minimum(social), gpu_particles
+    end
 
     for i in 1:maxiters
         update_particle_kernel(
             prob,
             gpu_particles,
             gbest,
-            w, opt;
+            w, opt, ws;
             ndrange = length(gpu_particles)
         )
         best_particle = minimum(gpu_particles)

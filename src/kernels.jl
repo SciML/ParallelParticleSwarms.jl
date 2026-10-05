@@ -118,9 +118,14 @@ end
     end
 end
 
+# The sync kernels take `social`: the global best, or with `local_best` one best per
+# block. Dispatch picks the block's entry, so the global-best path is unchanged.
+@inline social_best(social::AbstractArray, b) = @inbounds social[b]
+@inline social_best(gbest, b) = gbest
+
 @kernel function update_particle_states!(
         prob,
-        gpu_particles::AbstractArray{SPSOParticle{T1, T2}}, block_particles, gbest, w,
+        gpu_particles::AbstractArray{SPSOParticle{T1, T2}}, block_particles, social, w,
         opt::ParallelSyncPSOKernel
     ) where {T1, T2}
     i = @index(Global, Linear)
@@ -138,7 +143,9 @@ end
 
     if i <= n
         @inbounds particle = gpu_particles[i]
-        particle = update_particle_state(particle, prob, gbest, w, PSO_C1, PSO_C2, i, opt)
+        particle = update_particle_state(
+            particle, prob, social_best(social, gidx), w, PSO_C1, PSO_C2, i, opt
+        )
         @inbounds gpu_particles[i] = particle
         @inbounds costs[tidx] = particle.best_cost
         @inbounds idxs[tidx] = Int32(tidx)
@@ -165,7 +172,7 @@ end
         @inbounds win = idxs[1]
         if win == 0
             @inbounds block_particles[gidx] = SPSOGBest(
-                gbest.position, convert(T2, Inf)
+                social_best(social, gidx).position, convert(T2, Inf)
             )
         else
             @inbounds p = gpu_particles[i - tidx + win]
@@ -178,16 +185,35 @@ end
 # that you cannot do reduction within a kernel due to some bugs in KA.jl
 # https://github.com/JuliaGPU/KernelAbstractions.jl/issues/330
 @kernel function update_particle_states!(
-        prob, gpu_particles, gbest, w,
-        opt::ParallelSyncPSOKernel{Backend, T, G, H}
+        prob, gpu_particles, social, w,
+        opt::ParallelSyncPSOKernel{Backend, T, G, H}, block_size::Int
     ) where {Backend <: CPU, T, G, H}
     i = @index(Global, Linear)
 
     @inbounds particle = gpu_particles[i]
 
-    particle = update_particle_state(particle, prob, gbest, w, PSO_C1, PSO_C2, i, opt)
+    particle = update_particle_state(
+        particle, prob, social_best(social, cld(i, block_size)), w, PSO_C1, PSO_C2, i, opt
+    )
 
     @inbounds gpu_particles[i] = particle
+end
+
+# Best particle of each block of `block_size` particles, for `local_best` sub-swarms. One
+# work-item scans one block, so no in-kernel reduction is needed and this also runs on CPU.
+@kernel function update_block_bests!(social, gpu_particles, block_size::Int)
+    b = @index(Global, Linear)
+    lo = (b - 1) * block_size + 1
+    hi = min(b * block_size, length(gpu_particles))
+
+    best = lo
+    for j in (lo + 1):hi
+        @inbounds if gpu_particles[j].best_cost < gpu_particles[best].best_cost
+            best = j
+        end
+    end
+    @inbounds p = gpu_particles[best]
+    @inbounds social[b] = SPSOGBest(p.best_position, p.best_cost)
 end
 
 @kernel function update_particle_states_async!(

@@ -84,7 +84,7 @@ end
 
 """
     ParallelSyncPSOKernel(num_particles; backend = CPU(), θ = θ_default,
-        γ = γ_default, h = sqrt, workgroupsize = 256)
+        γ = γ_default, h = sqrt, workgroupsize = 256, local_best = false)
 
 Particle Swarm Optimization that updates particles in parallel and synchronizes
 after each generation to compute the global best position.
@@ -100,6 +100,10 @@ after each generation to compute the global best position.
 - `γ`: PSO velocity update coefficient schedule.
 - `h`: Transformation applied in the update rule.
 - `workgroupsize`: KernelAbstractions workgroup size. Defaults to 256.
+- `local_best`: If `true`, each block of `workgroupsize` particles is an independent
+    sub-swarm that follows its own best instead of the global best. This keeps the swarm
+    spread over several basins, e.g. to seed [`HybridPSO`](@ref)'s local search.
+    Defaults to `false`.
 
 # Examples
 
@@ -118,6 +122,7 @@ struct ParallelSyncPSOKernel{Backend, T, G, H} <: PSOAlgorithm
     γ::G
     h::H
     workgroupsize::Int
+    local_best::Bool
 end
 
 """
@@ -202,9 +207,11 @@ end
 function ParallelSyncPSOKernel(
         num_particles::Int;
         backend = CPU(), θ = θ_default, γ = γ_default, h = sqrt,
-        workgroupsize = 256
+        workgroupsize = 256, local_best = false
     )
-    return ParallelSyncPSOKernel(num_particles, backend, θ, γ, h, workgroupsize)
+    return ParallelSyncPSOKernel(
+        num_particles, backend, θ, γ, h, workgroupsize, local_best
+    )
 end
 
 function ParallelPSOArray(num_particles::Int; θ = θ_default, γ = γ_default, h = sqrt)
