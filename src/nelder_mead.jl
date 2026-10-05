@@ -106,7 +106,8 @@ end
     α = one(T)
     β = one(T) + T(2) / N
     γ = T(0.75) - one(T) / (2N)
-    δ = one(T) - one(T) / N
+    # Gao-Han's shrink factor is 0 in 1D, which would collapse the simplex; use 1/2 there.
+    δ = N == 1 ? T(0.5) : one(T) - one(T) / N
 
     x0 = _nm_project(x0, lb, ub)
     simplex = SVector{N + 1}(
@@ -158,9 +159,10 @@ end
     return isfinite(fx) && !(fx >= fu) ? (x, fx) : (u, fu)
 end
 
-# Host-side polish of the final best point, unless every particle was already polished.
-polish_best(::Nothing, f, p, u, fu, lb, ub) = (u, fu)
-function polish_best(nm::NelderMeadPolish, f, p, u, fu, lb, ub)
-    nm.all_particles && return (u, fu)
+# Host-side polish of the final best point. With `all_particles` it is skipped only when
+# that point came from the (already polished) local stage rather than the swarm.
+polish_best(::Nothing, f, p, u, fu, lb, ub, from_local) = (u, fu)
+function polish_best(nm::NelderMeadPolish, f, p, u, fu, lb, ub, from_local)
+    nm.all_particles && from_local && return (u, fu)
     return polish_point(nm, f, p, as_svector(u), fu, lb, ub)
 end

@@ -1,5 +1,5 @@
 using ParallelParticleSwarms, Optimization, SciMLBase, StaticArrays, KernelAbstractions, Test
-using BlackBoxOptimizationBenchmarking, LinearAlgebra, Random
+using BlackBoxOptimizationBenchmarking, Random
 const PPS = ParallelParticleSwarms
 
 @testset "SimpleLBFGS hybrid local polish" begin
@@ -96,15 +96,26 @@ end
     @test isbits(NelderMeadPolish())
     x0 = SVector(1.3, -1.8, 0.6, 1.2, -0.7)
     lb, ub = fill(-5.0, SVector{5}), fill(5.0, SVector{5})
-    # A single run collapses short of the ridge; restarts finish it.
-    _, fx = PPS.nelder_mead(ridge, nothing, x0, lb, ub, 10_000, 1.0e-12)
-    @test fx > 1.0e-6
+    # A single run can collapse short of the ridge; restarts finish it.
     x, fx = PPS.nelder_mead(ridge, nothing, x0, lb, ub, 10_000, 1.0e-12, 5)
     @test fx < 1.0e-6
     @test fx == ridge(x, nothing)
     allocs(x0, lb, ub) = @allocated PPS.nelder_mead(ridge, nothing, x0, lb, ub, 10_000, 1.0e-12, 5)
     allocs(x0, lb, ub)
     @test allocs(x0, lb, ub) == 0
+
+    # 1D: the shrink step must not collapse the simplex onto one vertex. With a shrink
+    # factor of 0 this start stalls at f ≈ 0.016.
+    wavy(x, p) = (x[1] - 0.3)^2 + 0.1 * (1 - cos(30 * (x[1] - 0.3)))
+    _, fx = PPS.nelder_mead(wavy, nothing, SVector(-2.7), nothing, nothing, 10_000, 1.0e-12)
+    @test fx < 1.0e-8
+
+    # With `all_particles`, the host still polishes a best point that came from the swarm.
+    nm_all = NelderMeadPolish(; all_particles = true)
+    @test PPS.polish_best(nm_all, ridge, nothing, x0, ridge(x0, nothing), lb, ub, true)[2] ==
+        ridge(x0, nothing)
+    @test PPS.polish_best(nm_all, ridge, nothing, x0, ridge(x0, nothing), lb, ub, false)[2] <
+        1.0e-6
 
     # Bounds hold even when the minimum is outside the box.
     x, _ = PPS.nelder_mead(ridge, nothing, x0, lb, zero(ub), 10_000, 1.0e-12, 5)

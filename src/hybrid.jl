@@ -90,11 +90,12 @@ function SciMLBase.solve!(
 
     fx_host = Array(result_fx)
     minobj, ind = findmin(fx_host)
-    if minobj < best_obj
+    from_local = minobj < best_obj
+    if from_local
         best_obj = minobj
         best_u = Array(result)[ind]
     end
-    best_u, best_obj = polish_best(polish, f_raw, p, best_u, best_obj, lb, ub)
+    best_u, best_obj = polish_best(polish, f_raw, p, best_u, best_obj, lb, ub, from_local)
 
     solve_time = (time() - t0) + sol_pso.stats.time
     return SciMLBase.build_solution(
@@ -155,11 +156,12 @@ function SciMLBase.solve!(
 
     fx_host = Array(result_fx)
     minobj, ind = findmin(fx_host)
-    if minobj < best_obj
+    from_local = minobj < best_obj
+    if from_local
         best_obj = minobj
         best_u = Array(@view result[ind:ind])[1]
     end
-    best_u, best_obj = polish_best(polish, f_raw, p, best_u, best_obj, lb, ub)
+    best_u, best_obj = polish_best(polish, f_raw, p, best_u, best_obj, lb, ub, from_local)
 
     solve_time = (time() - t0) + sol_pso.stats.time
     return SciMLBase.build_solution(
