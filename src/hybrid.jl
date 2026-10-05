@@ -31,7 +31,8 @@ end
 end
 
 @kernel function simplebfgs_run!(
-        grad_f, f_raw, p, x0s, result, result_fx, nlalg, maxiters, abstol, reltol
+        grad_f, f_raw, p, x0s, result, result_fx, nlalg, maxiters, abstol, reltol,
+        lb, ub, polish
     )
     i = @index(Global, Linear)
     @inbounds x0 = as_svector(x0s[i])
@@ -39,7 +40,7 @@ end
     sol = SciMLBase.solve(nlprob, nlalg; maxiters, abstol, reltol, grad_f = grad_f)
     u = as_svector(sol.u)
     T = eltype(u)
-    v = f_raw(u, p)
+    u, v = polish_point(polish, f_raw, p, u, f_raw(u, p), lb, ub)
     @inbounds result[i] = u
     @inbounds result_fx[i] = (isnan(v) | !isfinite(v)) ? T(Inf) : convert(T, v)
 end
@@ -64,6 +65,7 @@ function SciMLBase.solve!(
     T = eltype(prob.u0)
     d = length(prob.u0)
     lb, ub = _static_bounds(prob, Val(d), T)
+    polish = _typed_polish(opt.polish, T)
 
     grad_f = as_svector_grad(BoundedGrad(instantiate_gradient(f_raw, prob.f.adtype), lb, ub))
     nlalg = SimpleBroyden(; linesearch)
@@ -80,7 +82,8 @@ function SciMLBase.solve!(
     simplebfgs_run!(opt.backend)(
         grad_f, f_raw, p,
         x0s, result, result_fx,
-        nlalg, local_maxiters, abstol, reltol;
+        nlalg, local_maxiters, abstol, reltol,
+        lb, ub, _kernel_polish(polish);
         ndrange = n,
     )
     KernelAbstractions.synchronize(opt.backend)
@@ -91,6 +94,7 @@ function SciMLBase.solve!(
         best_obj = minobj
         best_u = Array(result)[ind]
     end
+    best_u, best_obj = polish_best(polish, f_raw, p, best_u, best_obj, lb, ub)
 
     solve_time = (time() - t0) + sol_pso.stats.time
     return SciMLBase.build_solution(
@@ -120,6 +124,7 @@ function SciMLBase.solve!(
     T = eltype(prob.u0)
     d = length(prob.u0)
     lb, ub = _static_bounds(prob, Val(d), T)
+    polish = _typed_polish(opt.polish, T)
 
     result = similar(sol_pso.original)
     particles = cache.pso_cache.particles
@@ -143,7 +148,7 @@ function SciMLBase.solve!(
     lbfgs_run!(opt.backend)(
         grad_f, f_raw, p, particles, result, result_fx, lb, ub,
         local_maxiters, abstol, reltol, typed_linesearch,
-        SimpleOptimization.__get_threshold(opt.local_opt);
+        SimpleOptimization.__get_threshold(opt.local_opt), _kernel_polish(polish);
         ndrange = n,
     )
     KernelAbstractions.synchronize(opt.backend)
@@ -154,6 +159,7 @@ function SciMLBase.solve!(
         best_obj = minobj
         best_u = Array(@view result[ind:ind])[1]
     end
+    best_u, best_obj = polish_best(polish, f_raw, p, best_u, best_obj, lb, ub)
 
     solve_time = (time() - t0) + sol_pso.stats.time
     return SciMLBase.build_solution(

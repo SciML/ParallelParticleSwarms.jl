@@ -227,7 +227,7 @@ struct BFGS end
 
 """
     HybridPSO(; backend = CPU(), pso = ParallelPSOKernel(100; global_update = false, backend),
-        local_opt = SimpleLBFGS())
+        local_opt = SimpleLBFGS(), polish = nothing)
 
 Run a particle-swarm search followed by local refinement.
 
@@ -237,19 +237,23 @@ Run a particle-swarm search followed by local refinement.
 - `pso`: Particle-swarm algorithm used to generate local starting points.
 - `local_opt`: `SimpleLBFGS` (projected Strong-Wolfe L-BFGS from
   SimpleOptimization.jl) or [`BFGS`](@ref) local refinement algorithm.
+- `polish`: Optional derivative-free polish after `local_opt`, e.g.
+  [`NelderMeadPolish`](@ref). Defaults to `nothing` (no polish).
 """
-struct HybridPSO{Backend, LocalOpt} <: HybridPSOAlgorithm{LocalOpt}
+struct HybridPSO{Backend, LocalOpt, Polish} <: HybridPSOAlgorithm{LocalOpt}
     pso::PSOAlgorithm
     local_opt::LocalOpt
     backend::Backend
+    polish::Polish
 end
 
 function HybridPSO(;
         backend = CPU(),
         pso = ParallelParticleSwarms.ParallelPSOKernel(100; global_update = false, backend),
-        local_opt = SimpleLBFGS()
+        local_opt = SimpleLBFGS(),
+        polish = nothing
     )
-    return HybridPSO(pso, local_opt, backend)
+    return HybridPSO(pso, local_opt, backend, polish)
 end
 
 SciMLBase.allowsbounds(::HybridPSOAlgorithm{LocalOpt}) where {LocalOpt} = true

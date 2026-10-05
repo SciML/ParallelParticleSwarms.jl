@@ -1,4 +1,6 @@
 using ParallelParticleSwarms, Optimization, SciMLBase, StaticArrays, KernelAbstractions, Test
+using BlackBoxOptimizationBenchmarking, LinearAlgebra, Random
+const PPS = ParallelParticleSwarms
 
 @testset "SimpleLBFGS hybrid local polish" begin
     function _solve_hybrid(
@@ -83,4 +85,53 @@ using ParallelParticleSwarms, Optimization, SciMLBase, StaticArrays, KernelAbstr
     )
     @test sol.u[1] ≈ 0.0 atol = 1.0e-6
     @test sol.objective ≈ 1.0 atol = 1.0e-6
+end
+
+@testset "NelderMeadPolish" begin
+    # Unrotated sharp ridge: the gradient keeps norm ≥ 100 next to the minimum at xopt.
+    xopt = SVector(1.0, -2.0, 0.5, 1.5, -1.0)
+    mask = SVector(0.0, 1.0, 1.0, 1.0, 1.0)
+    ridge(x, p) = (x[1] - xopt[1])^2 + 100 * sqrt(sum(abs2, (x - xopt) .* mask))
+
+    @test isbits(NelderMeadPolish())
+    x0 = SVector(1.3, -1.8, 0.6, 1.2, -0.7)
+    lb, ub = fill(-5.0, SVector{5}), fill(5.0, SVector{5})
+    # A single run collapses short of the ridge; restarts finish it.
+    _, fx = PPS.nelder_mead(ridge, nothing, x0, lb, ub, 10_000, 1.0e-12)
+    @test fx > 1.0e-6
+    x, fx = PPS.nelder_mead(ridge, nothing, x0, lb, ub, 10_000, 1.0e-12, 5)
+    @test fx < 1.0e-6
+    @test fx == ridge(x, nothing)
+    allocs(x0, lb, ub) = @allocated PPS.nelder_mead(ridge, nothing, x0, lb, ub, 10_000, 1.0e-12, 5)
+    allocs(x0, lb, ub)
+    @test allocs(x0, lb, ub) == 0
+
+    # Bounds hold even when the minimum is outside the box.
+    x, _ = PPS.nelder_mead(ridge, nothing, x0, lb, zero(ub), 10_000, 1.0e-12, 5)
+    @test all(lb .≤ x .≤ 0)
+
+    function hybrid(f, D; polish, local_opt = SimpleLBFGS())
+        optf = OptimizationFunction{false}((x, p) -> f(x), Optimization.AutoForwardDiff())
+        lb = SVector{D, Float64}(ntuple(_ -> -5.0, Val(D)))
+        prob = OptimizationProblem{false}(optf, zero(lb), nothing; lb, ub = -lb)
+        alg = HybridPSO(;
+            pso = ParallelSyncPSOKernel(1000; backend = CPU()),
+            backend = CPU(), local_opt, polish,
+        )
+        return solve(prob, alg; maxiters = 100, local_maxiters = 100, abstol = 1.0e-8, reltol = 1.0e-8)
+    end
+
+    # BBOB F13 (rotated sharp ridge): L-BFGS stalls short of the 1e-6 target, the polish
+    # finishes it.
+    Random.seed!(42)
+    f13 = bbob_suite(Val(5); seed = 1)[13]
+    sol = hybrid(f13, 5; polish = NelderMeadPolish())
+    @test sol.objective - f13.f_opt < 1.0e-6
+
+    f13_3 = bbob_suite(Val(3); seed = 1)[13]
+    sol = hybrid(f13_3, 3; polish = NelderMeadPolish(; all_particles = true))
+    @test sol.objective - f13_3.f_opt < 1.0e-6
+
+    sol = hybrid(f13_3, 3; polish = NelderMeadPolish(), local_opt = PPS.BFGS())
+    @test sol.objective - f13_3.f_opt < 1.0e-6
 end

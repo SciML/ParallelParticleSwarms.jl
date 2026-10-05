@@ -8,7 +8,7 @@ end
 # SimpleOptimization L-BFGS core directly rather than host-side `solve`.
 @kernel function lbfgs_run!(
         grad_f, f, p, particles, result, result_fx, lb, ub,
-        maxiters, abstol, reltol, linesearch, history_size
+        maxiters, abstol, reltol, linesearch, history_size, polish
     )
     i = @index(Global, Linear)
     @inbounds x0 = as_svector(particles[i].best_position)
@@ -16,6 +16,7 @@ end
         grad_f, f, p, x0, lb, ub, maxiters, abstol, reltol,
         linesearch, history_size
     )
+    u, v = polish_point(polish, f, p, u, v, lb, ub)
     @inbounds result[i] = u
     @inbounds result_fx[i] = isfinite(v) ? v : eltype(u)(Inf)
 end

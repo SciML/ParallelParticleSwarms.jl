@@ -102,12 +102,13 @@ include("init.jl")
 include("./solve.jl")
 include("./lbfgs.jl")
 include("./bfgs.jl")
+include("./nelder_mead.jl")
 include("./hybrid.jl")
 include("./precompilation.jl")
 
 export ParallelPSOKernel,
     ParallelSyncPSOKernel, ParallelPSOArray, SerialPSO, PSOAlgorithm, HybridPSO,
-    SimpleLBFGS, BFGS, pso_solve
+    SimpleLBFGS, BFGS, NelderMeadPolish, pso_solve
 
 # Reexported SciML common optimization interface; approved via `reexports_allow` in
 # test/qa/qa.jl.
