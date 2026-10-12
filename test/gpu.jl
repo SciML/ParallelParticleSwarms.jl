@@ -100,8 +100,11 @@ end
             )
         cache = init(prob, opt_f(n))
         sol = solve!(cache; maxiters = 5)
-        best = minimum(p.best_cost for p in Array(cache.particles))
-        @test sol.objective == best
+        best = argmin(p -> p.best_cost, Array(cache.particles))
+        # The winning position is copied exactly; `sol.objective` is recomputed on the
+        # host and can differ from the device-computed `best_cost` by rounding.
+        @test sol.u == best.best_position
+        @test sol.objective ≈ best.best_cost
     end
 end
 
