@@ -29,7 +29,7 @@ function __init!(
         particles, qmc_samples, prob, opt, typeof(prob.u0), T; ndrange = opt.num_particles
     )
 
-    best_particle = minimum(particles)
+    best_particle = _best_particle(particles)
     init_gbest = SPSOGBest(best_particle.best_position, best_particle.best_cost)
 
     return particles, init_gbest
@@ -46,7 +46,7 @@ function __init!(
 
     kernel!(particles, prob, opt, typeof(prob.u0), T; ndrange = opt.num_particles)
 
-    best_particle = minimum(particles)
+    best_particle = _best_particle(particles)
 
     init_gbest = SPSOGBest(best_particle.best_position, best_particle.best_cost)
 

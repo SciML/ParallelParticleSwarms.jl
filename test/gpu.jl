@@ -60,7 +60,7 @@ end
 @testset "reduction is dimension-independent" begin
     Random.seed!(1234)
     n_particles = 512
-    for D in (3, 10, 30)
+    for D in (3, 10, 30, 128)
         lb = SVector{D, Float64}(ntuple(_ -> -5.0, Val(D)))
         ub = SVector{D, Float64}(ntuple(_ -> 5.0, Val(D)))
         x0 = zero(lb)
