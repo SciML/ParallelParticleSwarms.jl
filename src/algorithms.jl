@@ -235,8 +235,14 @@ Run a particle-swarm search followed by local refinement.
 
 - `backend`: KernelAbstractions backend used by the particle-swarm stage.
 - `pso`: Particle-swarm algorithm used to generate local starting points.
-- `local_opt`: `SimpleLBFGS` (projected Strong-Wolfe L-BFGS from
-  SimpleOptimization.jl) or [`BFGS`](@ref) local refinement algorithm.
+- `local_opt`: `SimpleLBFGS` or [`BFGS`](@ref) local refinement algorithm.
+
+With `SimpleLBFGS`, every particle's best position is refined by a lockstep projected
+L-BFGS: all particles step together, each step evaluating 16 step sizes per particle in
+parallel and computing the gradient as one forward-mode directional derivative per
+thread. The memory size is taken from `SimpleLBFGS`'s `threshold`; its `linesearch` is
+not used. The gradient always comes from ForwardDiff directional derivatives,
+regardless of `prob.f.adtype`.
 """
 struct HybridPSO{Backend, LocalOpt} <: HybridPSOAlgorithm{LocalOpt}
     pso::PSOAlgorithm

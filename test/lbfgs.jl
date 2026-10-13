@@ -84,3 +84,14 @@ using ParallelParticleSwarms, Optimization, SciMLBase, StaticArrays, KernelAbstr
     @test sol.u[1] ≈ 0.0 atol = 1.0e-6
     @test sol.objective ≈ 1.0 atol = 1.0e-6
 end
+
+@testset "HybridPSO default lockstep L-BFGS on bounded Rosenbrock" begin
+    rosenbrock(x, p) = (1 - x[1])^2 + 100 * (x[2] - x[1]^2)^2
+    prob = OptimizationProblem(
+        OptimizationFunction{false}(rosenbrock, Optimization.AutoForwardDiff()),
+        SVector(0.0, 0.0); lb = SVector(-2.0, -2.0), ub = SVector(2.0, 2.0)
+    )
+    sol = solve(prob, HybridPSO(; backend = CPU()); local_maxiters = 200)
+    @test sol.u ≈ [1.0, 1.0] atol = 1.0e-4
+    @test sol.objective < 1.0e-8
+end

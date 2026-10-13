@@ -43,9 +43,9 @@ run_qa(
                 :DefaultOptimizationCache, # SciMLBase, SciML/SciMLBase.jl#1482
                 :evaluate_f,               # NonlinearSolveBase.Utils internal
                 :evaluate_f!!,             # NonlinearSolveBase.Utils internal
+                :derivative,               # ForwardDiff, no `public` declarations
                 :gradient,                 # ForwardDiff, no `public` declarations
                 :sacollect,                # StaticArrays, no `public` declarations
-                :_lbfgs,                   # SimpleOptimization kernel core, not yet public
                 :__get_threshold,          # SimpleOptimization, not yet public
             ),
         ),
