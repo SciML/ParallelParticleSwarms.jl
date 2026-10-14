@@ -176,10 +176,10 @@ end
         Random.seed!(1)
         xs = [SVector{2, T}(4 .* rand(T, 2) .- 2) for _ in 1:32]
         for (lb, ub) in (
-                (nothing, nothing),
-                (SVector{2, T}(-2, -2), SVector{2, T}(2, 2)),
-                (SVector{2, T}(-2, -2), SVector{2, T}(0.5, 2)),   # active upper bound
-            ), tol in (nothing, T(1.0e-8))
+                    (nothing, nothing),
+                    (SVector{2, T}(-2, -2), SVector{2, T}(2, 2)),
+                    (SVector{2, T}(-2, -2), SVector{2, T}(0.5, 2)),   # active upper bound
+                ), tol in (nothing, T(1.0e-8))
             compare(rosenbrock, xs, lb, ub, adtype, 100, tol)
         end
 
