@@ -113,8 +113,14 @@ function lockstep_lbfgs(
     # Converged: projected gradient, in x units, within `tol` (as in SimpleOptimization's
     # L-BFGS). The gradient is dropped where it pushes against an active bound.
     tol = abstol === nothing ? sqrt(eps(T)) : max(T(abstol), sqrt(eps(T)))
-    blocked(y, g, l, h) = (y <= l && g > zero(T)) || (y >= h && g < zero(T))
-    converged(st) = maximum(abs.(ifelse.(blocked.(st.x, st.g, ylo, yhi), zero(T), st.g) ./ w)) <= tol
+    function converged(st)
+        for i in 1:D
+            y, g = st.x[i], st.g[i]
+            blocked = (y <= ylo[i] && g > zero(T)) || (y >= yhi[i] && g < zero(T))
+            blocked || abs(g / w[i]) <= tol || return false
+        end
+        return true
+    end
 
     ys = map(x -> project((x - lo) ./ w), starts)
     zs = ntuple(_ -> zero(SVector{D, T}), Val(M))
