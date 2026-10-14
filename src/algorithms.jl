@@ -242,7 +242,9 @@ L-BFGS: all particles step together, each step evaluating 16 step sizes per part
 parallel and computing the gradient as one forward-mode directional derivative per
 thread. The memory size is taken from `SimpleLBFGS`'s `threshold`; its `linesearch` is
 not used. The gradient always comes from ForwardDiff directional derivatives,
-regardless of `prob.f.adtype`.
+regardless of `prob.f.adtype`. The local phase stops after `local_maxiters` iterations,
+once the best cost is below `abstol`, or once `maxtime` seconds have passed since it
+started, whichever comes first.
 """
 struct HybridPSO{Backend, LocalOpt} <: HybridPSOAlgorithm{LocalOpt}
     pso::PSOAlgorithm
