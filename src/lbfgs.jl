@@ -126,7 +126,7 @@ function lockstep_lbfgs(
         fbest = vec(fbest)
         ys = take_step.(states, vec(idx), dirs, fbest)
         states = _lbfgs_update.(states, ys, fbest, grad(ys))
-        all(converged, states) && break
+        mapreduce(converged, &, states; init = true) && break
         maxtime !== nothing && time() - t_start > maxtime && break
     end
 
