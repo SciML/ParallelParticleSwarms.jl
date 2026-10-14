@@ -110,14 +110,84 @@ end
     @test isfinite(sol.objective)
 end
 
-@testset "HybridPSO lockstep L-BFGS abstol with a negative minimum" begin
-    # abstol is a gradient tolerance, so a negative cost must not end the local phase early.
-    shifted(x, p) = (1 - x[1])^2 + 100 * (x[2] - x[1]^2)^2 - 100
-    prob = OptimizationProblem(
-        OptimizationFunction{false}(shifted, Optimization.AutoForwardDiff()),
-        SVector(0.0, 0.0); lb = SVector(-2.0, -2.0), ub = SVector(2.0, 2.0)
-    )
-    sol = solve(prob, HybridPSO(; backend = CPU()); maxiters = 2, local_maxiters = 200, abstol = 1.0e-8)
-    @test sol.u ≈ [1.0, 1.0] atol = 1.0e-4
-    @test sol.objective ≈ -100 atol = 1.0e-8
+# The lockstep L-BFGS must visit the same points as SimpleOptimization's `_lbfgs` run in
+# one thread per particle (master's kernel, kept here for this comparison). StaticArrays'
+# `dot` is an `@simd` loop, so its rounding depends on what it is inlined into and even
+# `_lbfgs` in a kernel and on the host differ in the last bits; for a bitwise comparison,
+# the same left-to-right sum without `@simd` stands in for it during this testset.
+using BlackBoxOptimizationBenchmarking, LinearAlgebra, Random
+import ParallelParticleSwarms: SimpleOptimization, StrongWolfeLineSearch
+
+@inline function LinearAlgebra.dot(a::SVector{D, T}, b::SVector{D, T}) where {D, T <: AbstractFloat}
+    r = zero(T) * zero(T) + zero(T) * zero(T)
+    for j in 1:D
+        r += a[j] * b[j]
+    end
+    return r
 end
+const simd_free_dot = which(LinearAlgebra.dot, Tuple{SVector{2, Float64}, SVector{2, Float64}})
+
+@kernel function lbfgs_run!(
+        grad_f, f, p, particles, result, result_fx, lb, ub,
+        maxiters, abstol, reltol, linesearch, history_size
+    )
+    i = @index(Global, Linear)
+    @inbounds x0 = ParallelParticleSwarms.as_svector(particles[i].best_position)
+    u, v, _, _ = SimpleOptimization._lbfgs(
+        grad_f, f, p, x0, lb, ub, maxiters, abstol, reltol,
+        linesearch, history_size
+    )
+    @inbounds result[i] = u
+    @inbounds result_fx[i] = isfinite(v) ? v : eltype(u)(Inf)
+end
+
+@testset "Lockstep L-BFGS matches per-thread _lbfgs" begin
+    function compare(f, xs::Vector{SVector{D, T}}, lb, ub, adtype, maxiters, tol) where {D, T}
+        particles = [(; best_position = x) for x in xs]
+        n = length(xs)
+        grad_f = ParallelParticleSwarms.as_svector_grad(
+            ParallelParticleSwarms.instantiate_gradient(f, adtype)
+        )
+        ls = SimpleLBFGS().linesearch
+        ls = StrongWolfeLineSearch(;
+            autodiff = ls.autodiff, c1 = T(ls.c1), c2 = T(ls.c2),
+            α_init = T(ls.α_init), α_max = T(ls.α_max),
+            maxiters = ls.maxiters, zoom_maxiters = ls.zoom_maxiters,
+        )
+        u1, f1 = similar(xs), fill(T(Inf), n)
+        lbfgs_run!(CPU())(
+            grad_f, f, nothing, particles, u1, f1, lb, ub,
+            maxiters, tol, tol, ls, Val(10); ndrange = n
+        )
+        u2, f2 = similar(xs), fill(T(Inf), n)
+        ParallelParticleSwarms.lockstep_lbfgs!(
+            u2, f2, grad_f, f, nothing, adtype, particles, lb, ub,
+            maxiters, tol, tol, ls, Val(10)
+        )
+        @test u2 == u1
+        @test f2 == f1
+    end
+
+    rosenbrock(x, p) = (1 - x[1])^2 + 100 * (x[2] - x[1]^2)^2
+    f8 = bbob_suite(Val(10); seed = 1)[8]
+    bbob_f8(x, p) = f8(x)
+    adtypes = (Optimization.AutoForwardDiff(), Optimization.AutoEnzyme(), SciMLBase.NoAD())
+    @testset "$T $(nameof(typeof(adtype)))" for T in (Float64, Float32), adtype in adtypes
+        Random.seed!(1)
+        xs = [SVector{2, T}(4 .* rand(T, 2) .- 2) for _ in 1:32]
+        for (lb, ub) in (
+                (nothing, nothing),
+                (SVector{2, T}(-2, -2), SVector{2, T}(2, 2)),
+                (SVector{2, T}(-2, -2), SVector{2, T}(0.5, 2)),   # active upper bound
+            ), tol in (nothing, T(1.0e-8))
+            compare(rosenbrock, xs, lb, ub, adtype, 100, tol)
+        end
+
+        lb, ub = fill(T(-5), SVector{10, T}), fill(T(5), SVector{10, T})
+        xs = [SVector{10, T}(10 .* rand(T, 10) .- 5) for _ in 1:32]
+        compare(bbob_f8, xs, nothing, nothing, adtype, 50, nothing)
+        compare(bbob_f8, xs, lb, ub, adtype, 50, nothing)
+    end
+end
+
+Base.delete_method(simd_free_dot)

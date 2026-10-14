@@ -235,16 +235,17 @@ Run a particle-swarm search followed by local refinement.
 
 - `backend`: KernelAbstractions backend used by the particle-swarm stage.
 - `pso`: Particle-swarm algorithm used to generate local starting points.
-- `local_opt`: `SimpleLBFGS` or [`BFGS`](@ref) local refinement algorithm.
+- `local_opt`: `SimpleLBFGS` (projected Strong-Wolfe L-BFGS from
+  SimpleOptimization.jl) or [`BFGS`](@ref) local refinement algorithm.
 
-With `SimpleLBFGS`, every particle's best position is refined by a lockstep projected
-L-BFGS: all particles step together, each step evaluating 16 step sizes per particle in
-parallel and computing the gradient as one forward-mode directional derivative per
-thread. The memory size is taken from `SimpleLBFGS`'s `threshold`; its `linesearch` is
-not used. The gradient always comes from ForwardDiff directional derivatives,
-regardless of `prob.f.adtype`. The local phase stops after `local_maxiters` iterations,
-once every particle's projected gradient is within `abstol` (at least `sqrt(eps)`), or once
-`maxtime` seconds have passed since it started, whichever comes first.
+With `SimpleLBFGS`, every particle's best position is refined by SimpleOptimization's
+projected L-BFGS with its Strong-Wolfe line search, unchanged, but executed in lockstep
+across particles: each step evaluates the objective and gradient at every particle's next
+point together. With `AutoForwardDiff` the gradient is split into one direction per
+thread; other AD types compute it once per particle, as before. Each particle visits the
+same points as a standalone SimpleOptimization solve, provided the objective returns the
+same floating-point type as its input. Passing `maxtime` to `solve` stops the local phase
+once that many seconds have passed since it started.
 """
 struct HybridPSO{Backend, LocalOpt} <: HybridPSOAlgorithm{LocalOpt}
     pso::PSOAlgorithm

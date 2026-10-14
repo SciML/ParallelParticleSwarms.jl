@@ -10,7 +10,9 @@ import ForwardDiff
 import KernelAbstractions
 import KernelAbstractions: CPU, @groupsize, @index, @kernel, @localmem, @private,
     @synchronize, @uniform, get_backend
+import LineSearch
 import LineSearch: StrongWolfeLineSearch
+import LinearAlgebra: dot, norm
 import NonlinearSolveBase.Utils as NLBUtils
 # Loaded for its `solve(::OptimizationProblem, alg, ...)` method, which applies the
 # `allowsbounds`/`allowsconstraints` checks before forwarding to `SciMLBase.__solve`.
@@ -28,7 +30,7 @@ import SciMLBase: ImmutableNonlinearProblem, NonlinearFunction, OptimizationFunc
 # `init`/`reinit!`/`solve!` cache workflow, and inspect the result. Everything stays
 # owned and documented upstream in SciMLBase.
 import SciMLBase: NullParameters, OptimizationSolution, ReturnCode, successful_retcode
-import Setfield: @set!
+import Setfield: @set, @set!
 import SimpleNonlinearSolve: SimpleBroyden
 import SimpleOptimization
 import SimpleOptimization: SimpleLBFGS

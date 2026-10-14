@@ -106,6 +106,7 @@ function SciMLBase.solve!(
         reltol = nothing,
         maxiters = 100,
         local_maxiters = 50,
+        linesearch = opt.local_opt.linesearch,
         maxtime = nothing,
         kwargs...
     ) where {Backend}
@@ -115,20 +116,44 @@ function SciMLBase.solve!(
     best_obj = _unwrap_scalar(sol_pso.objective)
 
     prob = cache.prob
+    f_raw = prob.f.f
+    p = prob.p
     T = eltype(prob.u0)
     d = length(prob.u0)
     lb, ub = _static_bounds(prob, Val(d), T)
 
+    result = similar(sol_pso.original)
+    particles = cache.pso_cache.particles
+    n = length(particles)
+    length(result) == n || throw(DimensionMismatch("particle and result counts must match"))
+    # Entries a thread never writes (e.g. a kernel cut short by a display
+    # watchdog) must not win the findmin below.
+    result_fx = KernelAbstractions.allocate(opt.backend, T, n)
+    fill!(result_fx, T(Inf))
+
     t0 = time()
-    starts = map(particle -> particle.best_position, cache.pso_cache.particles)
-    local_u, minobj = lockstep_lbfgs(
-        prob.f.f, prob.p, starts, lb, ub,
-        SimpleOptimization.__get_threshold(opt.local_opt), local_maxiters, abstol;
-        maxtime
+    grad_f = as_svector_grad(instantiate_gradient(f_raw, prob.f.adtype))
+    linesearch isa StrongWolfeLineSearch ||
+        throw(ArgumentError("HybridPSO with SimpleLBFGS requires a StrongWolfeLineSearch"))
+    typed_linesearch = StrongWolfeLineSearch(;
+        autodiff = linesearch.autodiff,
+        c1 = T(linesearch.c1), c2 = T(linesearch.c2),
+        α_init = T(linesearch.α_init), α_max = T(linesearch.α_max),
+        maxiters = linesearch.maxiters, zoom_maxiters = linesearch.zoom_maxiters,
     )
+    lockstep_lbfgs!(
+        result, result_fx, grad_f, f_raw, p, prob.f.adtype, particles, lb, ub,
+        local_maxiters, abstol, reltol, typed_linesearch,
+        SimpleOptimization.__get_threshold(opt.local_opt);
+        maxtime,
+    )
+    KernelAbstractions.synchronize(opt.backend)
+
+    fx_host = Array(result_fx)
+    minobj, ind = findmin(fx_host)
     if minobj < best_obj
         best_obj = minobj
-        best_u = local_u
+        best_u = Array(@view result[ind:ind])[1]
     end
 
     solve_time = (time() - t0) + sol_pso.stats.time

@@ -47,6 +47,16 @@ run_qa(
                 :gradient,                 # ForwardDiff, no `public` declarations
                 :sacollect,                # StaticArrays, no `public` declarations
                 :__get_threshold,          # SimpleOptimization, not yet public
+                # SimpleOptimization `_lbfgs` and LineSearch Strong-Wolfe internals that the
+                # lockstep L-BFGS in src/lbfgs.jl reuses so it runs the same arithmetic
+                :_as_u,
+                :_feasible_direction,
+                :_lbfgs_direction,
+                :_max_feasible_step,
+                :_project,
+                :_projected_gradient,
+                :_store_history,
+                :_sw_interpolate,
             ),
         ),
     ),
