@@ -66,8 +66,10 @@ end
 end
 
 function lockstep_lbfgs(
-        f, p, starts::AbstractArray{SVector{D, T}}, lb, ub, ::Val{M}, local_maxiters, abstol
+        f, p, starts::AbstractArray{SVector{D, T}}, lb, ub, ::Val{M}, local_maxiters, abstol;
+        maxtime = nothing
     ) where {D, T, M}
+    t_start = time()
     backend = get_backend(starts)
 
     lb = something(lb, fill(T(-Inf), SVector{D, T}))
@@ -116,6 +118,7 @@ function lockstep_lbfgs(
         X = stepx.(states, vec(idx), dirs, fmin)
         states = finish.(states, X, fmin, grad(X))
         abstol !== nothing && minimum(st -> st.f, states) < abstol && break
+        maxtime !== nothing && time() - t_start > maxtime && break
     end
 
     best_f, ind = findmin(Array(map(st -> st.f, states)))

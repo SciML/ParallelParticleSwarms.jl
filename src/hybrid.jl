@@ -106,6 +106,7 @@ function SciMLBase.solve!(
         reltol = nothing,
         maxiters = 100,
         local_maxiters = 50,
+        maxtime = nothing,
         kwargs...
     ) where {Backend}
 
@@ -122,7 +123,8 @@ function SciMLBase.solve!(
     starts = map(particle -> particle.best_position, cache.pso_cache.particles)
     local_u, minobj = lockstep_lbfgs(
         prob.f.f, prob.p, starts, lb, ub,
-        SimpleOptimization.__get_threshold(opt.local_opt), local_maxiters, abstol
+        SimpleOptimization.__get_threshold(opt.local_opt), local_maxiters, abstol;
+        maxtime
     )
     if minobj < best_obj
         best_obj = minobj

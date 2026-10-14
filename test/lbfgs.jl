@@ -95,3 +95,17 @@ end
     @test sol.u ≈ [1.0, 1.0] atol = 1.0e-4
     @test sol.objective < 1.0e-8
 end
+
+@testset "HybridPSO lockstep L-BFGS stops at maxtime" begin
+    rosenbrock(x, p) = (1 - x[1])^2 + 100 * (x[2] - x[1]^2)^2
+    prob = OptimizationProblem(
+        OptimizationFunction{false}(rosenbrock, Optimization.AutoForwardDiff()),
+        SVector(0.0, 0.0); lb = SVector(-2.0, -2.0), ub = SVector(2.0, 2.0)
+    )
+    opt = HybridPSO(; backend = CPU())
+    solve(prob, opt; maxiters = 2, local_maxiters = 2)   # compile
+    # No abstol and far more iterations than can run, so only maxtime ends the local phase.
+    t = @elapsed sol = solve(prob, opt; maxiters = 2, local_maxiters = 10^9, maxtime = 0.5)
+    @test t < 10
+    @test isfinite(sol.objective)
+end
