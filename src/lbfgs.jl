@@ -4,19 +4,23 @@ function _static_bounds(prob, ::Val{N}, ::Type{T}) where {N, T}
     return lb, ub
 end
 
-# Lockstep projected L-BFGS for HybridPSO's local phase. All particles take each step
-# together: the iteration loop runs on the host and every step is a few short
-# broadcasts over all particles, instead of one long divergent thread per particle.
-# Internally a coordinate with a finite box works in y = (x - lb) / (ub - lb) clamped to
-# [0, 1]; any other coordinate (`init` stores a missing bound as ±Inf) is left as is and
-# only clamped to the bound it has.
+# Lockstep projected L-BFGS for HybridPSO's local phase.
+#
+# All particles take each step together: the loop runs on the host, and each step is a few
+# short broadcasts over all particles (search direction, a line search that tries every step
+# size in `_STEPS` at once, and a gradient with one directional derivative per thread),
+# instead of one long, divergent thread per particle. Coordinates with a finite box are
+# optimized in y = (x - lb) / (ub - lb), so the step sizes mean the same on every problem;
+# unbounded coordinates are left as they are.
+
+const _STEPS = ntuple(i -> 2.0^(3 - i), Val(16))   # 4, 2, 1, ..., 2^-13
+const _CURVATURE_TOL = 1.0e-12                      # skip (s, y) pairs with s'y below this
 
 struct LBFGSState{D, T, M}
     x::SVector{D, T}
     f::T
     g::SVector{D, T}
-    # Newest pair first; only the first `k` are valid.
-    S::NTuple{M, SVector{D, T}}
+    S::NTuple{M, SVector{D, T}}   # newest pair first; only the first `k` are valid
     Y::NTuple{M, SVector{D, T}}
     k::Int
 end
@@ -65,6 +69,15 @@ end
     return ex
 end
 
+# Accept the step if it lowered the cost, then store (s, y) if it has positive curvature.
+# A rejected step keeps the point and clears the history.
+function _lbfgs_update(st::LBFGSState{D, T, M}, x, f, g) where {D, T, M}
+    f < st.f || return LBFGSState(st.x, st.f, st.g, st.S, st.Y, 0)
+    s, y = x - st.x, g - st.g
+    _dot(s, y) > _CURVATURE_TOL || return LBFGSState(x, f, g, st.S, st.Y, st.k)
+    return LBFGSState(x, f, g, (s, Base.front(st.S)...), (y, Base.front(st.Y)...), min(st.k + 1, M))
+end
+
 function lockstep_lbfgs(
         f, p, starts::AbstractArray{SVector{D, T}}, lb, ub, ::Val{M}, local_maxiters, abstol;
         maxtime = nothing
@@ -72,6 +85,7 @@ function lockstep_lbfgs(
     t_start = time()
     backend = get_backend(starts)
 
+    # Box transform x = lo + y .* w; a missing bound is stored as ±Inf.
     lb = something(lb, fill(T(-Inf), SVector{D, T}))
     ub = something(ub, fill(T(Inf), SVector{D, T}))
     boxed = isfinite.(ub - lb)
@@ -80,44 +94,39 @@ function lockstep_lbfgs(
     ylo, yhi = (lb - lo) ./ w, (ub - lo) ./ w
     project(y) = clamp.(y, ylo, yhi)
 
-    obj = y -> f(lo + y .* w, p)
+    # Objective in y: a cost that never returns NaN, and one directional derivative.
+    obj(y) = f(lo + y .* w, p)
     cost(y) = (c = obj(y); isfinite(c) ? T(c) : T(Inf))
     function partial(j, y)
         e = SVector{D, T}(ntuple(i -> T(i == j), Val(D)))
         dj = ForwardDiff.derivative(t -> obj(y + t * e), zero(T))
         return isfinite(dj) ? T(dj) : zero(T)
     end
-    # N × D threads, one directional derivative each, assembled back into SVectors.
     js = reshape(adapt(backend, collect(1:D)), D, 1)
-    grad(X) = vec(reinterpret(SVector{D, T}, partial.(js, reshape(X, 1, :))))
+    grad(ys) = vec(reinterpret(SVector{D, T}, partial.(js, reshape(ys, 1, :))))   # N × D threads
 
-    # Parallel line search over 16 step sizes 4, 2, 1, ..., 2^-13 per particle.
-    αs = ntuple(i -> T(2.0^(3 - i)), Val(16))
-    alphas = reshape(adapt(backend, collect(αs)), 1, :)
-    cand(st, α, d) = cost(project(st.x + α * d))
-    stepx(st, I, d, fb) = fb < st.f ? project(st.x + αs[I[2]] * d) : st.x
-    function finish(st, x, fb, g)
-        fb < st.f || return LBFGSState(st.x, st.f, st.g, st.S, st.Y, 0)
-        s = x - st.x
-        y = g - st.g
-        _dot(s, y) > 1.0e-12 || return LBFGSState(x, fb, g, st.S, st.Y, st.k)
-        return LBFGSState(
-            x, fb, g, (s, Base.front(st.S)...), (y, Base.front(st.Y)...), min(st.k + 1, M)
-        )
-    end
+    # Line search: every step size for every particle at once (N × length(_STEPS) threads).
+    steps = reshape(adapt(backend, collect(T.(_STEPS))), 1, :)
+    trial_cost(st, α, d) = cost(project(st.x + α * d))
+    take_step(st, I, d, fb) = fb < st.f ? project(st.x + T(_STEPS[I[2]]) * d) : st.x
 
-    X = map(x -> project((x - lo) ./ w), starts)
-    G = grad(X)
+    # Converged: projected gradient, in x units, within `tol` (as in SimpleOptimization's
+    # L-BFGS). The gradient is dropped where it pushes against an active bound.
+    tol = abstol === nothing ? sqrt(eps(T)) : max(T(abstol), sqrt(eps(T)))
+    blocked(y, g, l, h) = (y <= l && g > zero(T)) || (y >= h && g < zero(T))
+    converged(st) = maximum(abs.(ifelse.(blocked.(st.x, st.g, ylo, yhi), zero(T), st.g) ./ w)) <= tol
+
+    ys = map(x -> project((x - lo) ./ w), starts)
     zs = ntuple(_ -> zero(SVector{D, T}), Val(M))
-    states = map((x, g) -> LBFGSState(x, cost(x), g, zs, zs, 0), X, G)
+    states = map((y, g) -> LBFGSState(y, cost(y), g, zs, zs, 0), ys, grad(ys))
 
     for _ in 1:local_maxiters
         dirs = _lbfgs_direction.(states)
-        fmin, idx = findmin(cand.(states, alphas, dirs); dims = 2)
-        fmin = vec(fmin)
-        X = stepx.(states, vec(idx), dirs, fmin)
-        states = finish.(states, X, fmin, grad(X))
-        abstol !== nothing && minimum(st -> st.f, states) < abstol && break
+        fbest, idx = findmin(trial_cost.(states, steps, dirs); dims = 2)
+        fbest = vec(fbest)
+        ys = take_step.(states, vec(idx), dirs, fbest)
+        states = _lbfgs_update.(states, ys, fbest, grad(ys))
+        all(converged, states) && break
         maxtime !== nothing && time() - t_start > maxtime && break
     end
 

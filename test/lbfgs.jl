@@ -109,3 +109,15 @@ end
     @test t < 10
     @test isfinite(sol.objective)
 end
+
+@testset "HybridPSO lockstep L-BFGS abstol with a negative minimum" begin
+    # abstol is a gradient tolerance, so a negative cost must not end the local phase early.
+    shifted(x, p) = (1 - x[1])^2 + 100 * (x[2] - x[1]^2)^2 - 100
+    prob = OptimizationProblem(
+        OptimizationFunction{false}(shifted, Optimization.AutoForwardDiff()),
+        SVector(0.0, 0.0); lb = SVector(-2.0, -2.0), ub = SVector(2.0, 2.0)
+    )
+    sol = solve(prob, HybridPSO(; backend = CPU()); maxiters = 2, local_maxiters = 200, abstol = 1.0e-8)
+    @test sol.u ≈ [1.0, 1.0] atol = 1.0e-4
+    @test sol.objective ≈ -100 atol = 1.0e-8
+end
