@@ -100,8 +100,10 @@ end
             )
         cache = init(prob, opt_f(n))
         sol = solve!(cache; maxiters = 5)
-        best = minimum(p.best_cost for p in Array(cache.particles))
-        @test sol.objective == best
+        best = argmin(p -> p.best_cost, Array(cache.particles))
+        @test sol.u == best.best_position
+        # host recomputes f, while the kernel's best_cost may be FMA-contracted
+        @test isapprox(sol.objective, best.best_cost; rtol = 8eps())
     end
 end
 
