@@ -60,7 +60,7 @@ end
 @testset "reduction is dimension-independent" begin
     Random.seed!(1234)
     n_particles = 512
-    for D in (3, 10, 30)
+    for D in (3, 10, 30, 128)
         lb = SVector{D, Float64}(ntuple(_ -> -5.0, Val(D)))
         ub = SVector{D, Float64}(ntuple(_ -> 5.0, Val(D)))
         x0 = zero(lb)
@@ -100,8 +100,11 @@ end
             )
         cache = init(prob, opt_f(n))
         sol = solve!(cache; maxiters = 5)
-        best = minimum(p.best_cost for p in Array(cache.particles))
-        @test sol.objective == best
+        best = argmin(p -> p.best_cost, Array(cache.particles))
+        # The winning position is copied exactly; `sol.objective` is recomputed on the
+        # host and can differ from the device-computed `best_cost` by rounding.
+        @test sol.u == best.best_position
+        @test sol.objective ≈ best.best_cost
     end
 end
 

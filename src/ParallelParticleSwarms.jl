@@ -76,6 +76,20 @@ function Base.isless(
     return a.cost < b.cost
 end
 
+# Reduce over scalar costs instead of whole particles: large-dimension particles
+# overflow GPU shared memory in `minimum`, giving a zero-thread launch.
+# NaN costs map to typemax so they never win (argmin would otherwise pick NaN).
+_cost(p::SPSOParticle) = p.best_cost
+_cost(g::SPSOGBest) = g.cost
+_ranked_cost(p) = (c = _cost(p); isnan(c) ? typemax(c) : c)
+
+function _best_particle(ps)
+    i = argmin(map(_ranked_cost, ps))
+    return Array(view(ps, i:i))[1]
+end
+
+_best_particle(ps::Array) = argmin(_ranked_cost, ps)
+
 function Base.typemax(::Type{ParallelParticleSwarms.SPSOParticle{T1, T2}}) where {T1, T2}
     return ParallelParticleSwarms.SPSOParticle{T1, T2}(
         similar(T1),
