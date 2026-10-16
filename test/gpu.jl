@@ -102,8 +102,8 @@ end
         sol = solve!(cache; maxiters = 5)
         best = argmin(p -> p.best_cost, Array(cache.particles))
         @test sol.u == best.best_position
-        # host recomputes f, while the kernel's best_cost may be FMA-contracted
-        @test isapprox(sol.objective, best.best_cost; rtol = 8eps())
+        # host f vs FMA-contracted kernel cost: each n-term sum of squares is within n*eps/2
+        @test isapprox(sol.objective, best.best_cost; rtol = length(sol.u) * eps())
     end
 end
 
