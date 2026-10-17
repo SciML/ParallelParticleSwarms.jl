@@ -1,16 +1,39 @@
 module ParallelParticleSwarms
 
-using SciMLBase, StaticArrays, Setfield, KernelAbstractions
-using QuasiMonteCarlo, Optimization, SimpleNonlinearSolve, ForwardDiff
 import Adapt
 import Adapt: adapt
-import Enzyme: autodiff_deferred, Active, Reverse, Const
-import KernelAbstractions: @atomic, @atomicreplace, @atomicswap
-using QuasiMonteCarlo
-import DiffEqGPU: GPUTsit5, make_prob_compatible, vectorized_solve, vectorized_asolve
-
-using Reexport
-@reexport using SciMLBase
+import ADTypes: AutoEnzyme, AutoForwardDiff
+import Atomix: @atomic, @atomicreplace
+import Enzyme: autodiff, autodiff_deferred, Active, Reverse, Const, Duplicated, make_zero!
+import DiffEqGPU: GPUTsit5, vectorized_solve, vectorized_asolve
+import ForwardDiff
+import KernelAbstractions
+import KernelAbstractions: CPU, @groupsize, @index, @kernel, @localmem, @private,
+    @synchronize, @uniform, get_backend
+import LineSearch: StrongWolfeLineSearch
+import NonlinearSolveBase.Utils as NLBUtils
+# Loaded for its `solve(::OptimizationProblem, alg, ...)` method, which applies the
+# `allowsbounds`/`allowsconstraints` checks before forwarding to `SciMLBase.__solve`.
+# Nothing is imported from it by name.
+import OptimizationBase
+import PrecompileTools: @compile_workload, @setup_workload
+import QuasiMonteCarlo
+import QuasiMonteCarlo: LatinHypercubeSample, SamplingAlgorithm
+import SciMLBase
+import SciMLBase: ImmutableNonlinearProblem, NonlinearFunction, OptimizationFunction,
+    OptimizationProblem, OptimizationStats, init, remake, reinit!, solve, solve!
+# The rest of the SciML common optimization interface that ParallelParticleSwarms
+# reexports (see the second `export` below), so that `using ParallelParticleSwarms` on
+# its own is enough to build an `OptimizationProblem`, run the
+# `init`/`reinit!`/`solve!` cache workflow, and inspect the result. Everything stays
+# owned and documented upstream in SciMLBase.
+import SciMLBase: NullParameters, OptimizationSolution, ReturnCode, successful_retcode
+import Setfield: @set!
+import SimpleNonlinearSolve: SimpleBroyden
+import SimpleOptimization
+import SimpleOptimization: SimpleLBFGS
+import StaticArrays
+import StaticArrays: @SArray, MVector, SArray, SVector
 
 ## Use lb and ub either as StaticArray or pass them separately as CuArrays
 ## Passing as CuArrays makes more sense, or maybe SArray? The based on no. of dimension
@@ -77,10 +100,18 @@ include("./kernels.jl")
 include("./lowerlevel_solve.jl")
 include("init.jl")
 include("./solve.jl")
+include("./lbfgs.jl")
 include("./bfgs.jl")
 include("./hybrid.jl")
 include("./precompilation.jl")
 
 export ParallelPSOKernel,
-    ParallelSyncPSOKernel, ParallelPSOArray, SerialPSO
+    ParallelSyncPSOKernel, ParallelPSOArray, SerialPSO, PSOAlgorithm, HybridPSO,
+    SimpleLBFGS, BFGS, pso_solve
+
+# Reexported SciML common optimization interface; approved via `reexports_allow` in
+# test/qa/qa.jl.
+export NullParameters, OptimizationFunction, OptimizationProblem, OptimizationSolution,
+    OptimizationStats, ReturnCode, init, reinit!, remake, solve, solve!,
+    successful_retcode
 end

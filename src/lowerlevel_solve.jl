@@ -1,3 +1,7 @@
+@inline function pso_launch_workgroupsize(opt, n::Integer)
+    return max(1, min(Int(n), opt.workgroupsize))
+end
+
 function vectorized_solve!(
         prob,
         gbest,
@@ -9,16 +13,16 @@ function vectorized_solve!(
     )
     backend = get_backend(gpu_particles)
 
-    ## TODO: Get dynamic workgroupsize
-    workgroupsize = (min(length(gpu_particles), 1024),)
-    padded_ndrange = cld(length(gpu_particles), workgroupsize[1]) * workgroupsize[1]
+    ws = pso_launch_workgroupsize(opt, length(gpu_particles))
+    workgroupsize = (ws,)
+    padded_ndrange = cld(length(gpu_particles), ws) * ws
 
     update_particle_kernel = update_particle_states!(backend, workgroupsize)
 
     block_particles = KernelAbstractions.allocate(
         backend,
         typeof(gbest),
-        cld(length(gpu_particles), workgroupsize[1])
+        cld(length(gpu_particles), ws)
     )
     for i in 1:maxiters
         update_particle_kernel(
@@ -57,7 +61,7 @@ function vectorized_solve!(
             ndrange = length(gpu_particles)
         )
         best_particle = minimum(gpu_particles)
-        gbest = SPSOGBest(best_particle.position, best_particle.best_cost)
+        gbest = SPSOGBest(best_particle.best_position, best_particle.best_cost)
         w = w * wdamp
     end
 
@@ -78,8 +82,9 @@ function vectorized_solve!(
 
     backend = get_backend(gpu_particles)
 
-    kernel = update_particle_states!(backend, 1024)
-    padded_ndrange = cld(length(gpu_particles), 1024) * 1024
+    ws = pso_launch_workgroupsize(opt, length(gpu_particles))
+    kernel = update_particle_states!(backend, ws)
+    padded_ndrange = cld(length(gpu_particles), ws) * ws
 
     lock = KernelAbstractions.allocate(backend, UInt32, 1)
     fill!(lock, UInt32(0))
@@ -103,8 +108,9 @@ function vectorized_solve!(
     )
     backend = get_backend(gpu_particles)
 
-    kernel = update_particle_states_async!(backend)
-    padded_ndrange = cld(length(gpu_particles), 256) * 256
+    ws = pso_launch_workgroupsize(opt, length(gpu_particles))
+    kernel = update_particle_states_async!(backend, ws)
+    padded_ndrange = cld(length(gpu_particles), ws) * ws
     kernel(
         prob,
         gpu_particles,

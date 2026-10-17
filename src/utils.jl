@@ -1,8 +1,3 @@
-import SciMLBase: @add_kwonly, AbstractNonlinearProblem, AbstractNonlinearFunction,
-    AbstractODEFunction, AbstractODEProblem, warn_paramtype, ConstructionBase,
-    NullParameters, StandardNonlinearProblem, @reset, updated_u0_p,
-    remake_initialization_data, maybe_eager_initialize_problem
-
 @inbounds function uniform_itr(
         dim::Int, lb::AbstractArray{T}, ub::AbstractArray{T}
     ) where {T}
@@ -17,7 +12,7 @@ function uniform(dim::Int, lb::AbstractArray{T}, ub::AbstractArray{T}) where {T}
     return arr
 end
 
-function _gen_sampling_kernel(prob, num_particles::Int, sampling::QuasiMonteCarlo.SamplingAlgorithm)
+function _gen_sampling_kernel(prob, num_particles::Int, sampling::SamplingAlgorithm)
     lb = prob.lb
     ub = prob.ub
 
@@ -37,10 +32,10 @@ end
     position = StaticArrays.sacollect(
         T,
         ifelse(
-                abs(prob.u0[i]) > 0,
-                prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i]),
-                rand(eltype(prob.u0))
-            ) for i in 1:dim
+            abs(prob.u0[i]) > 0,
+            prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i]),
+            rand(eltype(prob.u0))
+        ) for i in 1:dim
     )
 
     velocity = zero(T)
@@ -91,7 +86,7 @@ end
 @kernel function gpu_init_particles!(
         particles, qmc_particles, prob, opt, ::Type{T},
         ::Type{T1}
-    ) where {T <: SArray, T1 <: QuasiMonteCarlo.SamplingAlgorithm}
+    ) where {T <: SArray, T1 <: SamplingAlgorithm}
     i = @index(Global, Linear)
 
     dim = length(prob.u0)
@@ -128,9 +123,9 @@ function init_particles!(particles, prob, opt, ::Type{T}) where {T <: SArray}
         gbest_position = StaticArrays.sacollect(
             T,
             ifelse(
-                    abs(prob.u0[i]) > 0, prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i]),
-                    rand(eltype(prob.u0))
-                ) for i in 1:dim
+                abs(prob.u0[i]) > 0, prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i]),
+                rand(eltype(prob.u0))
+            ) for i in 1:dim
         )
     else
         gbest_position = StaticArrays.sacollect(T, uniform_itr(dim, lb, ub))
@@ -156,10 +151,10 @@ function init_particles!(particles, prob, opt, ::Type{T}) where {T <: SArray}
             position = StaticArrays.sacollect(
                 T,
                 ifelse(
-                        abs(prob.u0[i]) > 0,
-                        prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i]),
-                        rand(eltype(prob.u0))
-                    ) for i in 1:dim
+                    abs(prob.u0[i]) > 0,
+                    prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i]),
+                    rand(eltype(prob.u0))
+                ) for i in 1:dim
             )
         else
             @inbounds position = StaticArrays.sacollect(T, positions[j, i] for j in 1:dim)
@@ -203,9 +198,9 @@ function init_particles(prob, opt, ::Type{T}) where {T <: SArray}
         gbest_position = StaticArrays.sacollect(
             T,
             ifelse(
-                    abs(prob.u0[i]) > 0, prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i]),
-                    rand(eltype(prob.u0))
-                ) for i in 1:dim
+                abs(prob.u0[i]) > 0, prob.u0[i] + rand(eltype(prob.u0)) * abs(prob.u0[i]),
+                rand(eltype(prob.u0))
+            ) for i in 1:dim
         )
     else
         gbest_position = StaticArrays.sacollect(T, uniform_itr(dim, lb, ub))
@@ -227,10 +222,10 @@ function init_particles(prob, opt, ::Type{T}) where {T <: SArray}
             @inbounds position = StaticArrays.sacollect(
                 T,
                 ifelse(
-                        abs(prob.u0[j]) > 0,
-                        prob.u0[j] + rand(eltype(prob.u0)) * abs(prob.u0[j]),
-                        rand(eltype(prob.u0))
-                    ) for j in 1:dim
+                    abs(prob.u0[j]) > 0,
+                    prob.u0[j] + rand(eltype(prob.u0)) * abs(prob.u0[j]),
+                    rand(eltype(prob.u0))
+                ) for j in 1:dim
             )
         else
             @inbounds position = StaticArrays.sacollect(T, positions[j, i] for j in 1:dim)
@@ -376,12 +371,53 @@ Based on the paper: Particle swarm optimization method for constrained optimizat
     return penalty
 end
 
-#TODO: Possible migration to DifferentiationInterface.jl,
-# however I cannot compile GPU-compatible gradients with Enzyme as Mar 2025
-@inline function instantiate_gradient(f, adtype::AutoForwardDiff)
-    return (θ, p) -> ForwardDiff.gradient(x -> f(x, p), θ)
+@inline function _enzyme_scalar_f(f, θ, p)
+    val = f(θ, p)
+    return val isa Number ? val : first(val)
 end
 
-@inline function instantiate_gradient(f, adtype::AutoEnzyme)
-    return (θ, p) -> autodiff_deferred(Reverse, Const(x -> f(x, p)), Active, Active(θ))[1][1]
+struct ForwardDiffGradient{F}
+    f::F
 end
+@inline function (g::ForwardDiffGradient)(θ, p)
+    return ForwardDiff.gradient(x -> g.f(x, p), θ)
+end
+
+struct EnzymeGradient{F}
+    f::F
+end
+@inline function (g::EnzymeGradient)(θ, p)
+    θd = θ isa SVector ? MVector(θ) : θ
+    res = similar(θd)
+    make_zero!(res)
+    autodiff(
+        Reverse,
+        Const(_enzyme_scalar_f),
+        Active,
+        Const(g.f),
+        Duplicated(θd, res),
+        Const(p),
+    )
+    return θ isa SVector ? SVector(res) : res
+end
+# SVectors are isbits, so they can be `Active` and differentiated without the
+# MVector shadow above; `autodiff_deferred` keeps this callable inside GPU kernels.
+@inline function (g::EnzymeGradient)(θ::SVector, p)
+    return autodiff_deferred(
+        Reverse, Const(_enzyme_scalar_f), Active, Const(g.f), Active(θ), Const(p)
+    )[1][2]
+end
+
+@inline instantiate_gradient(f, ::AutoForwardDiff) = ForwardDiffGradient(f)
+@inline instantiate_gradient(f, ::AutoEnzyme) = EnzymeGradient(f)
+# Problems without an AD type (e.g. `NoAD()`) fall back to ForwardDiff.
+@inline instantiate_gradient(f, _) = ForwardDiffGradient(f)
+
+@inline as_svector(x::SVector) = x
+@inline as_svector(x) = SVector(x)
+
+struct SVectorGradient{G}
+    g::G
+end
+@inline (sg::SVectorGradient)(θ, p) = as_svector(sg.g(θ, p))
+@inline as_svector_grad(g) = SVectorGradient(g)

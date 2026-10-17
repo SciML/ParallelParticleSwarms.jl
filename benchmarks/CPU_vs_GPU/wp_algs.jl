@@ -69,7 +69,7 @@ sol = solve(
             global_update = false,
             backend = CUDABackend()
         ),
-        local_opt = ParallelParticleSwarms.LBFGS()
+        local_opt = SimpleLBFGS()
     ), maxiters = 500,
     local_maxiters = 30
 )
@@ -168,7 +168,7 @@ for n_particles in Ns
                 global_update = false,
                 backend = CUDABackend()
             ),
-            local_opt = ParallelParticleSwarms.LBFGS()
+            local_opt = SimpleLBFGS()
         ), 500
     )
 
@@ -303,7 +303,7 @@ sol = solve(
             global_update = false,
             backend = CUDABackend()
         ),
-        local_opt = ParallelParticleSwarms.LBFGS()
+        local_opt = SimpleLBFGS()
     ), maxiters = 500,
     local_maxiters = 30
 )
@@ -437,13 +437,13 @@ begin
         # sol = solve(prob,
         #     ParallelParticleSwarms.HybridPSO(; backend = CUDABackend(),
         #     pso = ParallelParticleSwarms.ParallelPSOKernel(n_particles; global_update = false, backend = CUDABackend()),
-        #     local_opt = ParallelParticleSwarms.LBFGS()), maxiters = iters,
+        #     local_opt = SimpleLBFGS()), maxiters = iters,
         #     local_maxiters = iters)
 
         # sol = solve(prob,
         #         ParallelParticleSwarms.HybridPSO(; backend = CUDABackend(),
         #         pso = ParallelParticleSwarms.ParallelPSOKernel(n_particles; global_update = false, backend = CUDABackend()),
-        #         local_opt = ParallelParticleSwarms.LBFGS()), maxiters = iters,
+        #         local_opt = SimpleLBFGS()), maxiters = iters,
         #         local_maxiters = iters)
 
         obj,
@@ -456,7 +456,7 @@ begin
                     global_update = false,
                     backend = CUDABackend()
                 ),
-                local_opt = ParallelParticleSwarms.LBFGS()
+                local_opt = SimpleLBFGS()
             ), iters
         )
 

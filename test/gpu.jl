@@ -1,4 +1,5 @@
-using ParallelParticleSwarms, StaticArrays, SciMLBase, Test, LinearAlgebra, Random
+using ParallelParticleSwarms, StaticArrays, SciMLBase, Test, LinearAlgebra, Random,
+    BlackBoxOptimizationBenchmarking
 
 include("./utils.jl")
 
@@ -54,4 +55,85 @@ include("./utils.jl")
     @test prob.f(prob.u0, prob.p) > sol.objective
 
     @test sol.objective < 6.0e-4
+end
+
+@testset "reduction is dimension-independent" begin
+    Random.seed!(1234)
+    n_particles = 512
+    for D in (3, 10, 30)
+        lb = SVector{D, Float64}(ntuple(_ -> -5.0, Val(D)))
+        ub = SVector{D, Float64}(ntuple(_ -> 5.0, Val(D)))
+        x0 = zero(lb)
+        optf = OptimizationFunction{false}((x, p) -> sum(abs2, x), SciMLBase.NoAD())
+        prob = OptimizationProblem{false}(optf, x0, nothing; lb, ub)
+        for opt in (
+                ParallelSyncPSOKernel(n_particles; backend),
+                ParallelPSOKernel(n_particles; backend, global_update = true),
+            )
+            sol = solve(prob, opt; maxiters = 100)
+            @test isfinite(sol.objective)
+        end
+        for opt in (
+                ParallelSyncPSOKernel(1024; backend, workgroupsize = 1024),
+                ParallelPSOKernel(
+                    1024; backend, global_update = true, workgroupsize = 1024
+                ),
+            )
+            sol = solve(prob, opt; maxiters = 20)
+            @test isfinite(sol.objective)
+        end
+    end
+end
+
+@testset "block argmin matches brute force" begin
+    Random.seed!(1234)
+    D = 10
+    lb = SVector{D, Float64}(ntuple(_ -> -5.0, Val(D)))
+    ub = SVector{D, Float64}(ntuple(_ -> 5.0, Val(D)))
+    x0 = zero(lb)
+    optf = OptimizationFunction{false}((x, p) -> sum(abs2, x), SciMLBase.NoAD())
+    prob = OptimizationProblem{false}(optf, x0, nothing; lb, ub)
+    for n in (10, 100, 5000),
+            opt_f in (
+                n -> ParallelSyncPSOKernel(n; backend),
+                n -> ParallelPSOKernel(n; backend, global_update = true),
+            )
+        cache = init(prob, opt_f(n))
+        sol = solve!(cache; maxiters = 5)
+        best = argmin(p -> p.best_cost, Array(cache.particles))
+        @test sol.u == best.best_position
+        # host f vs FMA-contracted kernel cost: each n-term sum of squares is within n*eps/2
+        @test isapprox(sol.objective, best.best_cost; rtol = length(sol.u) * eps())
+    end
+end
+
+if GROUP == "CUDA"
+    @testset "HybridPSO L-BFGS BBOB F8 CUDA" begin
+        Random.seed!(42)
+        D = 10
+        f = bbob_suite(Val(D); seed = 1)[8]
+
+        lb = SVector{D, Float32}(ntuple(_ -> -5.0f0, Val(D)))
+        ub = SVector{D, Float32}(ntuple(_ -> 5.0f0, Val(D)))
+        x0 = SVector{D, Float32}(ntuple(_ -> -5.0f0 + rand(Float32) * 10.0f0, Val(D)))
+        optf = OptimizationFunction{false}((x, p) -> f(x), SciMLBase.NoAD())
+        prob = OptimizationProblem{false}(optf, x0, nothing; lb, ub)
+
+        sol = solve(
+            prob,
+            ParallelParticleSwarms.HybridPSO(;
+                pso = ParallelSyncPSOKernel(5_000; backend),
+                backend,
+            );
+            maxiters = 150,
+            local_maxiters = 50,
+            abstol = 1.0f-8,
+            reltol = 1.0f-8,
+        )
+
+        @test isfinite(sol.objective)
+        @test all(isfinite, sol.u)
+        @test all(lb .≤ sol.u) && all(sol.u .≤ ub)
+        @test Float32(sol.objective) - f.f_opt ≤ 1.0f-3
+    end
 end

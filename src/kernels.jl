@@ -1,11 +1,22 @@
+# PSO acceleration coefficients. Kept as constants rather than `@kernel` keyword arguments:
+# a keyword argument splits the kernel into a separate, non-inlined body function, and
+# passing `prob` to it makes every GPU thread copy `prob` from parameter space onto its stack.
+const PSO_C1 = 1.4962f0
+const PSO_C2 = 1.4962f0
+
+# StaticArrays' `rand(::Type{<:SArray})` is not inlined on the GPU, so each call returns its
+# result through a stack slot.
+@inline rand_static(::Type{S}) where {S <: SArray} =
+    S(ntuple(_ -> rand(eltype(S)), Val(length(S))))
+
 @inline function update_particle_state(particle, prob, gbest, w, c1, c2, iter, opt)
     updated_velocity = w .* particle.velocity .+
-        c1 .* rand(typeof(particle.velocity)) .*
+        c1 .* rand_static(typeof(particle.velocity)) .*
         (
         particle.best_position -
             particle.position
     ) .+
-        c2 .* rand(typeof(particle.velocity)) .*
+        c2 .* rand_static(typeof(particle.velocity)) .*
         (gbest.position - particle.position)
 
     @set! particle.velocity = updated_velocity
@@ -38,8 +49,7 @@ end
 @kernel function update_particle_states!(
         prob,
         gpu_particles::AbstractArray{SPSOParticle{T1, T2}}, gbest_ref, w,
-        opt::ParallelPSOKernel, lock::AbstractArray{UInt32}; c1 = 1.4962f0,
-        c2 = 1.4962f0
+        opt::ParallelPSOKernel, lock::AbstractArray{UInt32}
     ) where {T1, T2}
     i = @index(Global, Linear)
     tidx = @index(Local, Linear)
@@ -47,7 +57,8 @@ end
     @uniform gs = @groupsize()[1]
     @uniform n = length(gpu_particles)
 
-    best_queue = @localmem SPSOGBest{T1, T2} (gs)
+    queue_cost = @localmem T2 (gs)
+    queue_idx = @localmem Int32 (gs)
     queue_num = @localmem UInt32 1
 
     particle = @private SPSOParticle{T1, T2} 1
@@ -55,12 +66,7 @@ end
     if i <= n
         @inbounds particle[1] = gpu_particles[i]
     end
-    # Initialize cost to be Inf
     if tidx == 1
-        fill!(
-            best_queue,
-            SPSOGBest(gbest_ref[1].position, convert(typeof(gbest_ref[1].cost), Inf))
-        )
         queue_num[1] = UInt32(0)
     end
 
@@ -72,63 +78,50 @@ end
             prob,
             gbest_ref[1],
             w,
-            c1,
-            c2,
+            PSO_C1,
+            PSO_C2,
             i,
             opt
         )
-    end
-
-    @synchronize
-
-    if i <= n
-        @inbounds if particle[1].best_cost < gbest_ref[1].cost
-            queue_idx = @atomic queue_num[1] += UInt32(1)
-            @inbounds best_queue[queue_idx] = SPSOGBest(
-                particle[1].best_position,
-                particle[1].best_cost
-            )
-        end
-    end
-
-    @synchronize
-
-    if tidx == 1
-        if queue_num[1] > 1
-            # Find best fit in block
-            for j in 2:queue_num[1]
-                @inbounds if best_queue[j].cost < best_queue[1].cost
-                    best_queue[1] = best_queue[j]
-                end
-            end
-
-            # Take lock
-            while true
-                res = @atomicreplace lock[1] UInt32(0) => UInt32(1)
-                if res.success
-                    break
-                end
-            end
-
-            # Update global best fit
-            @inbounds if best_queue[1].cost < gbest_ref[1].cost
-                gbest_ref[1] = best_queue[1]
-            end
-
-            # Release lock
-            @atomicreplace lock[1] UInt32(1) => UInt32(0)
-        end
-    end
-    if i <= n
         @inbounds gpu_particles[i] = particle[1]
+        @inbounds if particle[1].best_cost < gbest_ref[1].cost
+            q = @atomic queue_num[1] += UInt32(1)
+            @inbounds queue_cost[q] = particle[1].best_cost
+            @inbounds queue_idx[q] = Int32(i)
+        end
+    end
+
+    @synchronize
+
+    if tidx == 1 && queue_num[1] > 0
+        best = 1
+        for j in 2:queue_num[1]
+            @inbounds if queue_cost[j] < queue_cost[best]
+                best = j
+            end
+        end
+        @inbounds p = gpu_particles[queue_idx[best]]
+        cand = SPSOGBest(p.best_position, p.best_cost)
+
+        while true
+            res = @atomicreplace lock[1] UInt32(0) => UInt32(1)
+            if res.success
+                break
+            end
+        end
+
+        @inbounds if cand.cost < gbest_ref[1].cost
+            gbest_ref[1] = cand
+        end
+
+        @atomicreplace lock[1] UInt32(1) => UInt32(0)
     end
 end
 
 @kernel function update_particle_states!(
         prob,
         gpu_particles::AbstractArray{SPSOParticle{T1, T2}}, block_particles, gbest, w,
-        opt::ParallelSyncPSOKernel; c1 = 1.4962f0,
-        c2 = 1.4962f0
+        opt::ParallelSyncPSOKernel
     ) where {T1, T2}
     i = @index(Global, Linear)
     tidx = @index(Local, Linear)
@@ -137,42 +130,47 @@ end
     @uniform gs = @groupsize()[1]
     @uniform n = length(gpu_particles)
 
-    group_particles = @localmem SPSOGBest{T1, T2} (gs)
+    costs = @localmem T2 (gs)
+    idxs = @localmem Int32 (gs)
 
-    if tidx == 1
-        fill!(group_particles, SPSOGBest(gbest.position, convert(typeof(gbest.cost), Inf)))
-    end
-
-    @synchronize
+    @inbounds costs[tidx] = convert(T2, Inf)
+    @inbounds idxs[tidx] = Int32(0)
 
     if i <= n
         @inbounds particle = gpu_particles[i]
-
-        particle = update_particle_state(particle, prob, gbest, w, c1, c2, i, opt)
-
-        @inbounds group_particles[tidx] = SPSOGBest(particle.best_position, particle.best_cost)
+        particle = update_particle_state(particle, prob, gbest, w, PSO_C1, PSO_C2, i, opt)
+        @inbounds gpu_particles[i] = particle
+        @inbounds costs[tidx] = particle.best_cost
+        @inbounds idxs[tidx] = Int32(tidx)
     end
 
-    stride = gs ÷ 2
-
-    while stride >= 1
+    nactive = @private Int 1
+    half = @private Int 1
+    nactive[1] = gs
+    while nactive[1] > 1
+        half[1] = cld(nactive[1], 2)
         @synchronize
-        if tidx <= stride
-            @inbounds if group_particles[tidx].cost > group_particles[tidx + stride].cost
-                group_particles[tidx] = group_particles[tidx + stride]
+        if tidx <= nactive[1] - half[1]
+            @inbounds if costs[tidx + half[1]] < costs[tidx]
+                costs[tidx] = costs[tidx + half[1]]
+                idxs[tidx] = idxs[tidx + half[1]]
             end
         end
-        stride = stride ÷ 2
+        nactive[1] = half[1]
     end
 
     @synchronize
 
     if tidx == 1
-        @inbounds block_particles[gidx] = group_particles[tidx]
-    end
-
-    if i <= n
-        @inbounds gpu_particles[i] = particle
+        @inbounds win = idxs[1]
+        if win == 0
+            @inbounds block_particles[gidx] = SPSOGBest(
+                gbest.position, convert(T2, Inf)
+            )
+        else
+            @inbounds p = gpu_particles[i - tidx + win]
+            @inbounds block_particles[gidx] = SPSOGBest(p.best_position, p.best_cost)
+        end
     end
 end
 
@@ -181,14 +179,13 @@ end
 # https://github.com/JuliaGPU/KernelAbstractions.jl/issues/330
 @kernel function update_particle_states!(
         prob, gpu_particles, gbest, w,
-        opt::ParallelSyncPSOKernel{Backend, T, G, H}; c1 = 1.4962f0,
-        c2 = 1.4962f0
+        opt::ParallelSyncPSOKernel{Backend, T, G, H}
     ) where {Backend <: CPU, T, G, H}
     i = @index(Global, Linear)
 
     @inbounds particle = gpu_particles[i]
 
-    particle = update_particle_state(particle, prob, gbest, w, c1, c2, i, opt)
+    particle = update_particle_state(particle, prob, gbest, w, PSO_C1, PSO_C2, i, opt)
 
     @inbounds gpu_particles[i] = particle
 end
@@ -197,9 +194,7 @@ end
         prob,
         gpu_particles,
         gbest_ref,
-        w, wdamp, maxiters, opt;
-        c1 = 1.4962f0,
-        c2 = 1.4962f0
+        w, wdamp, maxiters, opt
     )
     i = @index(Global, Linear)
 
@@ -211,7 +206,7 @@ end
 
         ## Run all generations
         for iter in 1:maxiters
-            particle = update_particle_state(particle, prob, gbest, w, c1, c2, iter, opt)
+            particle = update_particle_state(particle, prob, gbest, w, PSO_C1, PSO_C2, iter, opt)
             if particle.best_cost < gbest.cost
                 @set! gbest.position = particle.best_position
                 @set! gbest.cost = particle.best_cost

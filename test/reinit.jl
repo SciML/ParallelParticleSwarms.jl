@@ -43,7 +43,7 @@ reinit!(cache)
 cache = init(
     prob,
     ParallelParticleSwarms.HybridPSO(;
-        local_opt = ParallelParticleSwarms.LBFGS(), backend = CPU()
+        local_opt = SimpleLBFGS(), backend = CPU()
     )
 )
 

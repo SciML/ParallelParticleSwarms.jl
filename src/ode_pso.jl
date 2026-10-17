@@ -1,15 +1,14 @@
 @kernel function ode_update_particle_states!(
-        gpu_particles, lb, ub, gbest, w; c1 = 1.4962f0,
-        c2 = 1.4962f0
+        gpu_particles, lb, ub, gbest, w
     )
     i = @index(Global, Linear)
     if i <= length(gpu_particles)
         @inbounds particle = gpu_particles[i]
 
         updated_velocity = w .* particle.velocity .+
-            c1 .* rand(typeof(particle.velocity)) .*
+            PSO_C1 .* rand(typeof(particle.velocity)) .*
             (particle.best_position - particle.position) .+
-            c2 .* rand(typeof(particle.velocity)) .*
+            PSO_C2 .* rand(typeof(particle.velocity)) .*
             (gbest.position - particle.position)
 
         @set! particle.velocity = updated_velocity
