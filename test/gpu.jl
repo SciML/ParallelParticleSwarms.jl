@@ -60,7 +60,7 @@ end
 @testset "reduction is dimension-independent" begin
     Random.seed!(1234)
     n_particles = 512
-    for D in (3, 10, 30)
+    for D in (3, 10, 30, 128)
         lb = SVector{D, Float64}(ntuple(_ -> -5.0, Val(D)))
         ub = SVector{D, Float64}(ntuple(_ -> 5.0, Val(D)))
         x0 = zero(lb)
@@ -69,6 +69,8 @@ end
         for opt in (
                 ParallelSyncPSOKernel(n_particles; backend),
                 ParallelPSOKernel(n_particles; backend, global_update = true),
+                # Ragged population: the last workgroup is only partly filled.
+                ParallelPSOKernel(257; backend, global_update = false),
             )
             sol = solve(prob, opt; maxiters = 100)
             @test isfinite(sol.objective)
@@ -78,10 +80,69 @@ end
                 ParallelPSOKernel(
                     1024; backend, global_update = true, workgroupsize = 1024
                 ),
+                ParallelPSOKernel(
+                    1024; backend, global_update = false, workgroupsize = 1024
+                ),
             )
             sol = solve(prob, opt; maxiters = 20)
             @test isfinite(sol.objective)
         end
+    end
+end
+
+@testset "best particle ranks NaN last and breaks ties by index" begin
+    # Each candidate's position encodes its index, so the winner is identifiable even
+    # when its cost is NaN.
+    cases = [
+        [NaN, Inf] => 2,
+        [Inf, NaN] => 1,
+        [NaN, 3.0, NaN, 1.0, 2.0] => 4,
+        [1.0, -Inf, NaN] => 2,
+        [NaN, NaN, NaN] => 1,
+        [9.0, 1.0, 1.0, 9.0] => 2,
+    ]
+    pos(i) = SVector(Float64(i), Float64(i))
+    for (costs, winner) in cases
+        particles = [
+            ParallelParticleSwarms.SPSOParticle(pos(i), pos(i), c, pos(i), c)
+                for (i, c) in enumerate(costs)
+        ]
+        gbests = [
+            ParallelParticleSwarms.SPSOGBest(pos(i), c) for (i, c) in enumerate(costs)
+        ]
+        best = ParallelParticleSwarms._best_particle(
+            ParallelParticleSwarms.adapt(backend, particles)
+        )
+        @test best.best_position == pos(winner)
+        @test isequal(best.best_cost, costs[winner])
+        best = ParallelParticleSwarms._best_particle(
+            ParallelParticleSwarms.adapt(backend, gbests)
+        )
+        @test best.position == pos(winner)
+        @test isequal(best.cost, costs[winner])
+    end
+end
+
+@testset "NaN costs never win the block reduction" begin
+    Random.seed!(1234)
+    D = 4
+    lb = SVector{D, Float64}(ntuple(_ -> -5.0, Val(D)))
+    ub = SVector{D, Float64}(ntuple(_ -> 5.0, Val(D)))
+    x0 = zero(lb)
+    # About half the initial particles start (and stay) at a NaN personal best.
+    optf = OptimizationFunction{false}(
+        (x, p) -> x[1] < 0 ? NaN : sum(abs2, x), SciMLBase.NoAD()
+    )
+    prob = OptimizationProblem{false}(optf, x0, nothing; lb, ub)
+    for opt in (
+            ParallelSyncPSOKernel(64; backend, workgroupsize = 64),
+            ParallelSyncPSOKernel(100; backend, workgroupsize = 32),
+            ParallelPSOKernel(100; backend, global_update = true, workgroupsize = 32),
+            ParallelPSOKernel(100; backend, global_update = false, workgroupsize = 32),
+        )
+        sol = solve(prob, opt; maxiters = 5)
+        @test isfinite(sol.objective)
+        @test sol.u[1] >= 0
     end
 end
 
@@ -91,19 +152,26 @@ end
     lb = SVector{D, Float64}(ntuple(_ -> -5.0, Val(D)))
     ub = SVector{D, Float64}(ntuple(_ -> 5.0, Val(D)))
     x0 = zero(lb)
-    optf = OptimizationFunction{false}((x, p) -> sum(abs2, x), SciMLBase.NoAD())
-    prob = OptimizationProblem{false}(optf, x0, nothing; lb, ub)
-    for n in (10, 100, 5000),
+    # `floor(abs(x[1]))` is 0 across a whole slab, so many particles tie at the minimum.
+    for f in ((x, p) -> sum(abs2, x), (x, p) -> floor(abs(x[1]))),
+            n in (10, 100, 5000),
             opt_f in (
                 n -> ParallelSyncPSOKernel(n; backend),
                 n -> ParallelPSOKernel(n; backend, global_update = true),
+                n -> ParallelPSOKernel(n; backend, global_update = false),
             )
+        optf = OptimizationFunction{false}(f, SciMLBase.NoAD())
+        prob = OptimizationProblem{false}(optf, x0, nothing; lb, ub)
         cache = init(prob, opt_f(n))
         sol = solve!(cache; maxiters = 5)
-        best = argmin(p -> p.best_cost, Array(cache.particles))
-        @test sol.u == best.best_position
+        particles = Array(cache.particles)
+        best_cost = minimum(p -> p.best_cost, particles)
+        # The reductions need not pick the lowest-index minimizer: the block tree and
+        # the shared global best (which keeps its incumbent) may settle on any of them.
+        minimizers = [p.best_position for p in particles if p.best_cost == best_cost]
+        @test sol.u in minimizers
         # host f vs FMA-contracted kernel cost: each n-term sum of squares is within n*eps/2
-        @test isapprox(sol.objective, best.best_cost; rtol = length(sol.u) * eps())
+        @test isapprox(sol.objective, best_cost; rtol = length(sol.u) * eps())
     end
 end
 

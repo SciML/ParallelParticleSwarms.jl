@@ -97,7 +97,7 @@ function parameter_estim_ode!(
 
         KernelAbstractions.synchronize(backend)
 
-        best_particle = minimum(gpu_particles)
+        best_particle = _best_particle(gpu_particles)
 
         KernelAbstractions.synchronize(backend)
 
@@ -156,7 +156,7 @@ function parameter_estim_ode!(
 
         KernelAbstractions.synchronize(backend)
 
-        best_particle = minimum(gpu_particles)
+        best_particle = _best_particle(gpu_particles)
 
         KernelAbstractions.synchronize(backend)
 
