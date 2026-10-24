@@ -78,17 +78,34 @@ end
 
 # Reduce over scalar costs instead of whole particles: large-dimension particles
 # overflow GPU shared memory in `minimum`, giving a zero-thread launch.
-# NaN costs map to typemax so they never win (argmin would otherwise pick NaN).
+# Candidates are ranked by `isless` on (cost, index): NaN sorts after every number,
+# including Inf, so it only wins when all costs are NaN, and ties go to the lowest
+# index. An all-NaN population therefore yields the first particle.
 _cost(p::SPSOParticle) = p.best_cost
 _cost(g::SPSOGBest) = g.cost
-_ranked_cost(p) = (c = _cost(p); isnan(c) ? typemax(c) : c)
+
+_min_cost_index(a, b) = isless(b, a) ? b : a
+
+# Identity for `_min_cost_index`: ranks after every (cost, index) candidate.
+_worst_cost(::Type{T}) where {T <: AbstractFloat} = T(NaN)
+_worst_cost(::Type{T}) where {T} = typemax(T)
 
 function _best_particle(ps)
-    i = argmin(map(_ranked_cost, ps))
+    costs = map(_cost, ps)
+    init = (_worst_cost(eltype(costs)), typemax(Int))
+    _, i = mapreduce(tuple, _min_cost_index, costs, eachindex(costs); init)
     return Array(view(ps, i:i))[1]
 end
 
-_best_particle(ps::Array) = argmin(_ranked_cost, ps)
+function _best_particle(ps::Array)
+    best = firstindex(ps)
+    @inbounds for i in eachindex(ps)
+        if isless(_cost(ps[i]), _cost(ps[best]))
+            best = i
+        end
+    end
+    return @inbounds ps[best]
+end
 
 function Base.typemax(::Type{ParallelParticleSwarms.SPSOParticle{T1, T2}}) where {T1, T2}
     return ParallelParticleSwarms.SPSOParticle{T1, T2}(
