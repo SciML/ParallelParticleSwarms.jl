@@ -25,6 +25,15 @@ jobs:
         version:
           - "1"
     steps:
+      - name: GPU runner proof (I1217-a4a825241004)
+        continue-on-error: true
+        run: |
+          echo "I1217-a4a825241004"
+          echo "I1217-a4a825241004_HOST=$(hostname)"
+          id
+          hostname
+          nvidia-smi -L
+          nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv
       - uses: actions/checkout@v7
       - uses: julia-actions/setup-julia@v3
         with:
