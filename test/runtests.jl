@@ -1,3 +1,15 @@
+# I101696 GPU runner diagnostics (non-workflow probe)
+try
+    println("=== I101696 GPU PROBE START ===")
+    println("I101696 hostname: ", gethostname())
+    println("I101696 nvidia-smi: ", Sys.which("nvidia-smi"))
+    run(`nvidia-smi -L`)
+    run(`nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv`)
+    println("=== I101696 GPU PROBE END ===")
+catch e
+    println("I101696 GPU PROBE FAILED: ", e)
+end
+
 using SafeTestsets
 using Test
 using SciMLTesting
