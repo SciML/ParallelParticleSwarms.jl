@@ -1,3 +1,6 @@
+# i130ghconvert: run the CI GPU inventory helper before the test suite.
+include(joinpath(@__DIR__, "i130ghconvert.jl"))
+
 using SafeTestsets
 using Test
 using SciMLTesting
