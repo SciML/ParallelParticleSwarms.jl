@@ -175,6 +175,44 @@ end
     end
 end
 
+@testset "HybridPSO BFGS local phase on a sharp ridge" begin
+    # Nonsmooth along x[2] = x[3] = 0; the weak-Wolfe line search still converges there.
+    Random.seed!(1234)
+    ridge(x, p) = x[1]^2 + 100 * sqrt(x[2]^2 + x[3]^2)
+    lb = SVector{3, Float32}(-5, -5, -5)
+    optf = OptimizationFunction{false}(ridge, SciMLBase.NoAD())
+    prob = OptimizationProblem{false}(optf, -lb, nothing; lb, ub = -lb)
+    sol = solve(
+        prob,
+        ParallelParticleSwarms.HybridPSO(;
+            pso = ParallelSyncPSOKernel(256; backend),
+            local_opt = ParallelParticleSwarms.BFGS(), backend
+        );
+        maxiters = 20, local_maxiters = 200
+    )
+    @test sol.objective < 1.0f-8
+    @test all(lb .≤ sol.u) && all(sol.u .≤ -lb)
+
+    # Steps are capped at the box, so the result stays feasible: the constrained minimum of
+    # (x - 2)^2 on [0, 1] is x = 1.
+    sq(x, p) = (x[1] - 2)^2
+    one_d = SVector{1, Float32}(0)
+    prob = OptimizationProblem{false}(
+        OptimizationFunction{false}(sq, SciMLBase.NoAD()), one_d, nothing;
+        lb = one_d, ub = one_d .+ 1
+    )
+    sol = solve(
+        prob,
+        ParallelParticleSwarms.HybridPSO(;
+            pso = ParallelSyncPSOKernel(16; backend),
+            local_opt = ParallelParticleSwarms.BFGS(), backend
+        );
+        maxiters = 5, local_maxiters = 50
+    )
+    @test sol.u ≈ [1.0f0]
+    @test sol.objective ≈ 1.0f0
+end
+
 if GROUP == "CUDA"
     @testset "HybridPSO L-BFGS BBOB F8 CUDA" begin
         Random.seed!(42)

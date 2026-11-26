@@ -30,18 +30,61 @@ end
     return as_svector(g)
 end
 
+# Largest step α with lb ≤ x + α d ≤ ub.
+@inline _max_step(x, d, ::Nothing, ::Nothing) = eltype(x)(Inf)
+@inline function _max_step(x, d, lb, ub)
+    α = ifelse.(d .> 0, (ub .- x) ./ d, ifelse.(d .< 0, (lb .- x) ./ d, eltype(x)(Inf)))
+    return max(zero(eltype(x)), minimum(α))
+end
+
+# BFGS with a weak-Wolfe line search (Lewis & Overton, 2013): a step only needs sufficient
+# decrease and ∇f(x + α d)'d ≥ c2 ∇f(x)'d, found by doubling then bisection. Unlike a
+# strong-Wolfe search it also terminates at kinks, so BFGS keeps converging on nonsmooth
+# problems such as sharp ridges. Steps are capped at the box.
+@inline function bfgs_weak_wolfe(
+        grad_f, f, p, x::SVector{D, T}, lb, ub, maxiters, gtol; c1 = T(1.0e-4), c2 = T(0.9)
+    ) where {D, T}
+    eye = SMatrix{D, D, T}(ntuple(k -> T((k - 1) % D == (k - 1) ÷ D), Val(D * D)))
+    H, fx, g = eye, T(f(x, p)), grad_f(x, p)
+    for _ in 1:maxiters
+        (isfinite(fx) && all(isfinite, g) && maximum(abs, g) > gtol) || break
+        d = -(H * g)
+        sum(g .* d) < 0 || (H = eye; d = -g)
+        gd, α_max = sum(g .* d), _max_step(x, d, lb, ub)
+        α_max > 0 || break
+        lo, hi, α, ok = zero(T), T(Inf), min(one(T), α_max), false
+        xn, fn, gn = x, fx, g
+        for _ in 1:60
+            xn = x .+ α .* d
+            fn = T(f(xn, p))
+            if fn <= fx + c1 * α * gd
+                gn = grad_f(xn, p)
+                (ok = sum(gn .* d) >= c2 * gd || α >= α_max) && break
+                lo = α
+            else
+                hi = α
+            end
+            α = isfinite(hi) ? (lo + hi) / 2 : min(2α, α_max)
+        end
+        ok || break
+        s, y = xn .- x, gn .- g
+        sy = sum(s .* y)
+        if sy > 0
+            Hy = H * y
+            H = H - (s * Hy' + Hy * s') / sy + (sum(y .* Hy) / sy + 1) / sy * (s * s')
+        end
+        x, fx, g = xn, fn, gn
+    end
+    return x, fx
+end
+
 @kernel function simplebfgs_run!(
-        grad_f, f_raw, p, x0s, result, result_fx, nlalg, maxiters, abstol, reltol
+        grad_f, f_raw, p, x0s, result, result_fx, lb, ub, maxiters, gtol
     )
     i = @index(Global, Linear)
-    @inbounds x0 = as_svector(x0s[i])
-    nlprob = ImmutableNonlinearProblem{false}(NonlinearFunction{false}(grad_f), x0, p)
-    sol = SciMLBase.solve(nlprob, nlalg; maxiters, abstol, reltol, grad_f = grad_f)
-    u = as_svector(sol.u)
-    T = eltype(u)
-    v = f_raw(u, p)
+    @inbounds u, v = bfgs_weak_wolfe(grad_f, f_raw, p, as_svector(x0s[i]), lb, ub, maxiters, gtol)
     @inbounds result[i] = u
-    @inbounds result_fx[i] = (isnan(v) | !isfinite(v)) ? T(Inf) : convert(T, v)
+    @inbounds result_fx[i] = isfinite(v) ? v : eltype(u)(Inf)
 end
 
 function SciMLBase.solve!(
@@ -50,7 +93,6 @@ function SciMLBase.solve!(
         reltol = nothing,
         maxiters = 100,
         local_maxiters = 50,
-        linesearch = StrongWolfeLineSearch(),
         kwargs...
     ) where {Backend}
 
@@ -66,7 +108,6 @@ function SciMLBase.solve!(
     lb, ub = _static_bounds(prob, Val(d), T)
 
     grad_f = as_svector_grad(BoundedGrad(instantiate_gradient(f_raw, prob.f.adtype), lb, ub))
-    nlalg = SimpleBroyden(; linesearch)
 
     x0s = sol_pso.original
     n = length(x0s)
@@ -80,7 +121,7 @@ function SciMLBase.solve!(
     simplebfgs_run!(opt.backend)(
         grad_f, f_raw, p,
         x0s, result, result_fx,
-        nlalg, local_maxiters, abstol, reltol;
+        lb, ub, local_maxiters, abstol === nothing ? zero(T) : T(abstol);
         ndrange = n,
     )
     KernelAbstractions.synchronize(opt.backend)

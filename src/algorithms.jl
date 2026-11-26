@@ -221,7 +221,9 @@ SciMLBase.allowsconstraints(::PSOAlgorithm) = true
 """
     BFGS()
 
-Local Broyden refinement used by [`HybridPSO`](@ref).
+Local refinement for [`HybridPSO`](@ref): BFGS with a weak-Wolfe line search, which also
+converges on nonsmooth problems (kinks, sharp ridges). On its own, `solve(prob, BFGS())`
+solves ∇f = 0 with Broyden's method.
 """
 struct BFGS end
 

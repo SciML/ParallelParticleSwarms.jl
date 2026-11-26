@@ -33,7 +33,7 @@ import SimpleNonlinearSolve: SimpleBroyden
 import SimpleOptimization
 import SimpleOptimization: SimpleLBFGS
 import StaticArrays
-import StaticArrays: @SArray, MVector, SArray, SVector
+import StaticArrays: @SArray, MVector, SArray, SMatrix, SVector
 
 ## Use lb and ub either as StaticArray or pass them separately as CuArrays
 ## Passing as CuArrays makes more sense, or maybe SArray? The based on no. of dimension
