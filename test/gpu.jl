@@ -175,6 +175,62 @@ end
     end
 end
 
+@testset "Nelder-Mead polish inside the local-stage kernels" begin
+    # Float32 sharp ridge with its minimum 0 at the origin. Both gradient-based local
+    # stages stop short of it from these starts; the all-particle polish must finish it
+    # in the kernel output itself, before any host-side selection or fallback polish.
+    ridge(x, p) = x[1]^2 + 100 * sqrt(x[2]^2 + x[3]^2)
+    T = Float32
+    lb = SVector{3, T}(-5, -5, -5)
+    ub = -lb
+    starts = [
+        SVector{3, T}(1, 0.5, -0.25), SVector{3, T}(-2, 1, 1),
+        SVector{3, T}(3, -1, 2), SVector{3, T}(0.5, 2, -3),
+    ]
+    n = length(starts)
+    raw = ParallelParticleSwarms.instantiate_gradient(ridge, ParallelParticleSwarms.AutoForwardDiff())
+    polish = ParallelParticleSwarms._typed_polish(NelderMeadPolish(; all_particles = true), T)
+    ls = ParallelParticleSwarms.StrongWolfeLineSearch(;
+        autodiff = ParallelParticleSwarms.AutoForwardDiff(), c1 = T(1.0e-4), c2 = T(0.9), α_init = one(T),
+        α_max = T(1.0e6), maxiters = 50, zoom_maxiters = 50
+    )
+    particles = ParallelParticleSwarms.adapt(
+        backend, [ParallelParticleSwarms.SPSOParticle(s, zero(s), ridge(s, nothing), s, ridge(s, nothing)) for s in starts]
+    )
+    x0s = ParallelParticleSwarms.adapt(backend, starts)
+    lbfgs = (pol) -> begin
+        u, fx = similar(x0s), ParallelParticleSwarms.KernelAbstractions.allocate(backend, T, n)
+        ParallelParticleSwarms.lbfgs_run!(backend)(
+            ParallelParticleSwarms.as_svector_grad(raw), ridge, nothing, particles, u, fx, lb, ub, 100,
+            T(1.0e-8), T(1.0e-8), ls, Val(10), pol;
+            ndrange = n
+        )
+        ParallelParticleSwarms.KernelAbstractions.synchronize(backend)
+        return Array(u), Array(fx)
+    end
+    broyden = (pol) -> begin
+        u, fx = similar(x0s), ParallelParticleSwarms.KernelAbstractions.allocate(backend, T, n)
+        ParallelParticleSwarms.simplebfgs_run!(backend)(
+            ParallelParticleSwarms.as_svector_grad(ParallelParticleSwarms.BoundedGrad(raw, lb, ub)), ridge, nothing, x0s, u, fx,
+            ParallelParticleSwarms.SimpleBroyden(; linesearch = ParallelParticleSwarms.StrongWolfeLineSearch()), 100,
+            T(1.0e-8), T(1.0e-8), lb, ub, pol, true;
+            ndrange = n
+        )
+        ParallelParticleSwarms.KernelAbstractions.synchronize(backend)
+        return Array(u), Array(fx)
+    end
+    @testset "$name" for (name, run) in (("lbfgs_run!", lbfgs), ("simplebfgs_run!", broyden))
+        _, base_fx = run(nothing)
+        u, fx = run(polish)
+        @test all(isfinite, base_fx)
+        @test any(>(1.0f-6), base_fx)
+        @test all(x -> all(lb .≤ x .≤ ub), u)
+        @test all(fx .≤ base_fx)
+        @test all(<(1.0f-6), fx)
+        @test fx ≈ [ridge(x, nothing) for x in u]
+    end
+end
+
 if GROUP == "CUDA"
     @testset "HybridPSO L-BFGS BBOB F8 CUDA" begin
         Random.seed!(42)

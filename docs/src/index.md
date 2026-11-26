@@ -9,6 +9,7 @@ ParallelPSOArray
 SerialPSO
 HybridPSO
 BFGS
+NelderMeadPolish
 ```
 
 Local L-BFGS polish for [`HybridPSO`](@ref) uses
