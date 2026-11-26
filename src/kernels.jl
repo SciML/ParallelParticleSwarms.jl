@@ -9,11 +9,13 @@ const PSO_C2 = 1.4962f0
 @inline rand_static(::Type{S}) where {S <: SArray} =
     S(ntuple(_ -> rand(eltype(S)), Val(length(S))))
 
-@inline function update_particle_state(particle, prob, gbest, w, c1, c2, iter, opt)
+@inline function update_particle_state(
+        particle, prob, gbest, w, c1, c2, iter, opt, pbest = particle.best_position
+    )
     updated_velocity = w .* particle.velocity .+
         c1 .* rand_static(typeof(particle.velocity)) .*
         (
-        particle.best_position -
+        pbest -
             particle.position
     ) .+
         c2 .* rand_static(typeof(particle.velocity)) .*
@@ -34,6 +36,48 @@ const PSO_C2 = 1.4962f0
         @set! particle.best_cost = particle.cost
     end
     return particle
+end
+
+# Competitive learning (Cheng & Jin, 2015). Each generation pairs the particles through a
+# random affine permutation σ(i) = (a (i - 1) + b) mod n, positions 2k and 2k + 1 forming a
+# pair (with odd n the last position sits out). The better particle of a pair keeps its place;
+# the other moves with the PSO update, learning from the winner (social term) and the swarm
+# mean x̄ (cognitive term) with random inertia: v ← r v + r' (x_winner - x) + φ r'' (x̄ - x).
+# Partners are read from `prev`, a snapshot of the generation, so both see the same costs.
+const CSO_PHI = 0.05f0
+
+@inline function competitive_update(particle, i, (prev, x̄, a, ainv, b, refine), prob, opt)
+    n = length(prev)
+    k = mod(a * (i - 1) + b, n) ⊻ 1
+    k < n || return particle
+    @inbounds partner = prev[mod(ainv * (k - b), n) + 1]
+    S = typeof(particle.velocity)
+    partner.cost < particle.cost ||
+        return refine ? refine_winner(particle, prev, prob, i, opt) : particle
+    return update_particle_state(
+        particle, prob, partner, rand_static(S), CSO_PHI, one(eltype(S)), i, opt, x̄
+    )
+end
+
+# Refinement runs: the winner tries x_a + (x_b - x_c) / 2 of three random particles, taking
+# each coordinate from it with probability 0.9 (and at least one), and keeps it if no worse.
+@inline function refine_winner(particle, prev, prob, i, opt)
+    S = typeof(particle.position)
+    T = eltype(S)
+    n = length(prev)
+    pick() = @inbounds prev[min(n, unsafe_trunc(Int, rand(T) * n) + 1)].position
+    y = pick() .+ T(0.5) .* (pick() .- pick())
+    jr = min(length(S), unsafe_trunc(Int, rand(T) * length(S)) + 1)
+    take = SVector(ntuple(d -> d == jr || rand(T) < T(0.9), Val(length(S))))
+    trial = particle
+    @set! trial.position = min.(max.(S(ifelse.(take, y, particle.position)), prob.lb), prob.ub)
+    trial = handle_constraints(trial, prob, i, opt)
+    trial.cost <= particle.cost || return particle
+    if trial.cost < trial.best_cost
+        @set! trial.best_position = trial.position
+        @set! trial.best_cost = trial.cost
+    end
+    return trial
 end
 
 @inline function handle_constraints(particle, prob, iter, opt)
@@ -121,7 +165,7 @@ end
 @kernel function update_particle_states!(
         prob,
         gpu_particles::AbstractArray{SPSOParticle{T1, T2}}, block_particles, gbest, w,
-        opt::ParallelSyncPSOKernel
+        opt::ParallelSyncPSOKernel, competition
     ) where {T1, T2}
     i = @index(Global, Linear)
     tidx = @index(Local, Linear)
@@ -141,7 +185,9 @@ end
 
     if i <= n
         @inbounds particle = gpu_particles[i]
-        particle = update_particle_state(particle, prob, gbest, w, PSO_C1, PSO_C2, i, opt)
+        particle = competition === nothing ?
+            update_particle_state(particle, prob, gbest, w, PSO_C1, PSO_C2, i, opt) :
+            competitive_update(particle, i, competition, prob, opt)
         @inbounds gpu_particles[i] = particle
         @inbounds costs[tidx] = particle.best_cost
         @inbounds idxs[tidx] = Int32(tidx)
@@ -182,13 +228,15 @@ end
 # https://github.com/JuliaGPU/KernelAbstractions.jl/issues/330
 @kernel function update_particle_states!(
         prob, gpu_particles, gbest, w,
-        opt::ParallelSyncPSOKernel{Backend, T, G, H}
+        opt::ParallelSyncPSOKernel{Backend, T, G, H}, competition
     ) where {Backend <: CPU, T, G, H}
     i = @index(Global, Linear)
 
     @inbounds particle = gpu_particles[i]
 
-    particle = update_particle_state(particle, prob, gbest, w, PSO_C1, PSO_C2, i, opt)
+    particle = competition === nothing ?
+        update_particle_state(particle, prob, gbest, w, PSO_C1, PSO_C2, i, opt) :
+        competitive_update(particle, i, competition, prob, opt)
 
     @inbounds gpu_particles[i] = particle
 end

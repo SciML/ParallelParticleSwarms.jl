@@ -68,6 +68,7 @@ end
         prob = OptimizationProblem{false}(optf, x0, nothing; lb, ub)
         for opt in (
                 ParallelSyncPSOKernel(n_particles; backend),
+                ParallelSyncPSOKernel(n_particles; backend, competitive = true),
                 ParallelPSOKernel(n_particles; backend, global_update = true),
                 # Ragged population: the last workgroup is only partly filled.
                 ParallelPSOKernel(257; backend, global_update = false),
@@ -137,6 +138,7 @@ end
     for opt in (
             ParallelSyncPSOKernel(64; backend, workgroupsize = 64),
             ParallelSyncPSOKernel(100; backend, workgroupsize = 32),
+            ParallelSyncPSOKernel(100; backend, workgroupsize = 32, competitive = true),
             ParallelPSOKernel(100; backend, global_update = true, workgroupsize = 32),
             ParallelPSOKernel(100; backend, global_update = false, workgroupsize = 32),
         )
@@ -157,6 +159,7 @@ end
             n in (10, 100, 5000),
             opt_f in (
                 n -> ParallelSyncPSOKernel(n; backend),
+                n -> ParallelSyncPSOKernel(n; backend, competitive = true),
                 n -> ParallelPSOKernel(n; backend, global_update = true),
                 n -> ParallelPSOKernel(n; backend, global_update = false),
             )
@@ -173,6 +176,62 @@ end
         # host f vs FMA-contracted kernel cost: each n-term sum of squares is within n*eps/2
         @test isapprox(sol.objective, best_cost; rtol = length(sol.u) * eps())
     end
+end
+
+@testset "competitive learning" begin
+    Random.seed!(1234)
+    D = 5
+    rastrigin(x, p) = 10length(x) + sum(x .^ 2 .- 10 .* cos.(2.0f0 * Float32(π) .* x))
+    lb = SVector{D, Float32}(ntuple(_ -> -5.12f0, Val(D)))
+    ub = -lb
+    x0 = SVector{D, Float32}(ntuple(_ -> 1.0f0, Val(D)))
+    prob = OptimizationProblem{false}(OptimizationFunction{false}(rastrigin), x0, nothing; lb, ub)
+
+    sol = solve(prob, ParallelSyncPSOKernel(1000; backend, competitive = true); maxiters = 1000)
+    @test sol.objective < 1.0f-3
+
+    sol = solve(
+        prob,
+        ParallelParticleSwarms.HybridPSO(;
+            pso = ParallelSyncPSOKernel(1000; backend, competitive = true), backend
+        );
+        maxiters = 100, local_maxiters = 100
+    )
+    @test sol.objective < 1.0f-3
+
+    # Each generation the particles meet in pairs and only the loser of a pair moves.
+    for n in (2, 3, 101, 1000)
+        cache = init(prob, ParallelSyncPSOKernel(n; backend, competitive = true))
+        before = Array(cache.particles)
+        solve!(cache; maxiters = 1)
+        after = Array(cache.particles)
+        @test count(i -> after[i].position != before[i].position, 1:n) == n ÷ 2
+    end
+
+    # Refinement runs: drawn per run; winners only take differential steps that are no
+    # worse, so at most the losers (n ÷ 2) can get worse in a generation.
+    @test !init(prob, ParallelSyncPSOKernel(10; backend, competitive = true)).refine
+    # The positional constructor from before these options keeps working.
+    @test ParallelSyncPSOKernel(
+        10, backend, ParallelParticleSwarms.θ_default,
+        ParallelParticleSwarms.γ_default, sqrt, 256
+    ) ==
+        ParallelSyncPSOKernel(10; backend)
+    for n in (3, 101, 1000)
+        cache = init(prob, ParallelSyncPSOKernel(n; backend, competitive = true, refine = 1))
+        @test cache.refine
+        before = Array(cache.particles)
+        solve!(cache; maxiters = 1)
+        after = Array(cache.particles)
+        @test count(i -> after[i].cost > before[i].cost, 1:n) <= n ÷ 2
+        reinit!(cache)
+        @test cache.refine
+    end
+    sol = solve(
+        prob, ParallelSyncPSOKernel(1000; backend, competitive = true, refine = 1);
+        maxiters = 1000
+    )
+    @test sol.objective < 1.0f-3
 end
 
 if GROUP == "CUDA"

@@ -2,6 +2,19 @@
     return max(1, min(Int(n), opt.workgroupsize))
 end
 
+# Snapshot, swarm mean and random pairing for one competitive generation (see
+# `competitive_update`); `nothing` for the standard PSO update.
+competition(::Nothing, particles, refine) = nothing
+function competition(prev, particles, refine)
+    copyto!(prev, particles)
+    n = length(particles)
+    a = rand(1:max(1, n - 1))
+    while gcd(a, n) != 1
+        a = rand(1:(n - 1))
+    end
+    return (prev, sum(get_pos, particles) ./ n, a, invmod(a, n), rand(0:(n - 1)), refine)
+end
+
 function vectorized_solve!(
         prob,
         gbest,
@@ -9,7 +22,8 @@ function vectorized_solve!(
         maxiters = 100,
         w = 0.7298f0,
         wdamp = 1.0f0,
-        debug = false
+        debug = false,
+        refine = false
     )
     backend = get_backend(gpu_particles)
 
@@ -24,12 +38,13 @@ function vectorized_solve!(
         typeof(gbest),
         cld(length(gpu_particles), ws)
     )
+    prev = opt.competitive ? similar(gpu_particles) : nothing
     for i in 1:maxiters
         update_particle_kernel(
             prob,
             gpu_particles, block_particles,
             gbest,
-            w, opt;
+            w, opt, competition(prev, gpu_particles, refine);
             ndrange = padded_ndrange
         )
         gbest = _best_particle(block_particles)
@@ -46,18 +61,20 @@ function vectorized_solve!(
         maxiters = 100,
         w = 0.7298f0,
         wdamp = 1.0f0,
-        debug = false
+        debug = false,
+        refine = false
     ) where {Backend <: CPU, T, G, H}
     backend = get_backend(gpu_particles)
 
     update_particle_kernel = update_particle_states!(backend)
 
+    prev = opt.competitive ? similar(gpu_particles) : nothing
     for i in 1:maxiters
         update_particle_kernel(
             prob,
             gpu_particles,
             gbest,
-            w, opt;
+            w, opt, competition(prev, gpu_particles, refine);
             ndrange = length(gpu_particles)
         )
         best_particle = _best_particle(gpu_particles)
