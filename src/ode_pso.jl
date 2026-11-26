@@ -14,8 +14,8 @@
         @set! particle.velocity = updated_velocity
         @set! particle.position = particle.position + particle.velocity
 
-        update_pos = max(particle.position, lb)
-        update_pos = min(update_pos, ub)
+        update_pos = max.(particle.position, lb)
+        update_pos = min.(update_pos, ub)
 
         @set! particle.position = update_pos
         @inbounds gpu_particles[i] = particle
@@ -97,7 +97,7 @@ function parameter_estim_ode!(
 
         KernelAbstractions.synchronize(backend)
 
-        best_particle = minimum(gpu_particles)
+        best_particle = _best_particle(gpu_particles)
 
         KernelAbstractions.synchronize(backend)
 
@@ -156,7 +156,7 @@ function parameter_estim_ode!(
 
         KernelAbstractions.synchronize(backend)
 
-        best_particle = minimum(gpu_particles)
+        best_particle = _best_particle(gpu_particles)
 
         KernelAbstractions.synchronize(backend)
 

@@ -16,6 +16,7 @@ run_tests(;
         #TODO: Current throws warning for redefinition with the use of @testset multiple times. Migrate to TestItemRunners.jl
         return @testset for BACKEND in unique(("CPU", CI_GROUP))
             global GROUP = BACKEND
+            @testset "$(BACKEND) ODE parameter estimation particle update" include("./ode_pso.jl")
             @testset "$(BACKEND) optimizers tests" include("./gpu.jl")
             GC.gc(true)
             @testset "$(BACKEND) optimizers with constraints tests" include("./constraints.jl")

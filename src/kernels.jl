@@ -133,7 +133,10 @@ end
     costs = @localmem T2 (gs)
     idxs = @localmem Int32 (gs)
 
-    @inbounds costs[tidx] = convert(T2, Inf)
+    # Rank with `isless` so NaN sorts after every number. Padding (i > n) fills the
+    # block's highest slots with NaN, and a slot only takes a higher slot's candidate
+    # when it is strictly less, so padding never displaces a real particle.
+    @inbounds costs[tidx] = convert(T2, NaN)
     @inbounds idxs[tidx] = Int32(0)
 
     if i <= n
@@ -151,7 +154,7 @@ end
         half[1] = cld(nactive[1], 2)
         @synchronize
         if tidx <= nactive[1] - half[1]
-            @inbounds if costs[tidx + half[1]] < costs[tidx]
+            @inbounds if isless(costs[tidx + half[1]], costs[tidx])
                 costs[tidx] = costs[tidx + half[1]]
                 idxs[tidx] = idxs[tidx + half[1]]
             end
