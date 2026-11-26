@@ -124,6 +124,7 @@ function Base.typemax(::Type{ParallelParticleSwarms.SPSOGBest{T1, T2}}) where {T
     )
 end
 
+include("./nelder_mead.jl")
 include("./algorithms.jl")
 include("./utils.jl")
 include("./ode_pso.jl")
@@ -133,7 +134,6 @@ include("init.jl")
 include("./solve.jl")
 include("./lbfgs.jl")
 include("./bfgs.jl")
-include("./nelder_mead.jl")
 include("./hybrid.jl")
 include("./precompilation.jl")
 

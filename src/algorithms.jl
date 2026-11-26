@@ -240,12 +240,16 @@ Run a particle-swarm search followed by local refinement.
 - `polish`: Optional derivative-free polish after `local_opt`, e.g.
   [`NelderMeadPolish`](@ref). Defaults to `nothing` (no polish).
 """
-struct HybridPSO{Backend, LocalOpt, Polish} <: HybridPSOAlgorithm{LocalOpt}
+struct HybridPSO{Backend, LocalOpt} <: HybridPSOAlgorithm{LocalOpt}
     pso::PSOAlgorithm
     local_opt::LocalOpt
     backend::Backend
-    polish::Polish
+    polish::Union{Nothing, NelderMeadPolish}
 end
+
+HybridPSO{Backend, LocalOpt}(pso, local_opt, backend) where {Backend, LocalOpt} =
+    HybridPSO{Backend, LocalOpt}(pso, local_opt, backend, nothing)
+HybridPSO(pso, local_opt, backend) = HybridPSO(pso, local_opt, backend, nothing)
 
 function HybridPSO(;
         backend = CPU(),

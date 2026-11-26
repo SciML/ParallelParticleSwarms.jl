@@ -121,6 +121,37 @@ end
     x, _ = PPS.nelder_mead(ridge, nothing, x0, lb, zero(ub), 10_000, 1.0e-12, 5)
     @test all(lb .≤ x .≤ 0)
 
+    # Convex valley with its minimum (0.8, 0.005) inside the unit box. Clipped steps fold
+    # the simplex onto the face x[1] = 1; smaller restarts get it off again.
+    valley(x, p) = 10 * ((x[1] - 0.8) - 5 * (x[2] - 0.005))^2 + (x[2] - 0.005)^2
+    x, fx = PPS.nelder_mead(
+        valley, nothing, SVector(0.56, 0.61), zero(SVector{2}), ones(SVector{2}),
+        10_000, 1.0e-12, 5
+    )
+    @test all(0 .≤ x .≤ 1)
+    @test fx == valley(x, nothing)
+    @test fx ≤ sqrt(eps(Float64))
+
+    # The BFGS local stage is unbounded; with a polish its result is brought into the box,
+    # where the constrained minimum of (x - 2)^2 on [0, 1] is x = 1.
+    sq(x, p) = (x[1] - 2)^2
+    sq_prob = OptimizationProblem{false}(
+        OptimizationFunction{false}(sq, Optimization.AutoForwardDiff()), SVector(0.5),
+        nothing; lb = SVector(0.0), ub = SVector(1.0)
+    )
+    @testset "BFGS + polish feasibility, all_particles = $all_particles" for all_particles in
+        (false, true)
+        alg = HybridPSO(;
+            pso = ParallelSyncPSOKernel(16; backend = CPU()), backend = CPU(),
+            local_opt = PPS.BFGS(), polish = NelderMeadPolish(; all_particles),
+        )
+        sol = solve(sq_prob, alg; maxiters = 5, local_maxiters = 50)
+        @test 0 ≤ sol.u[1] ≤ 1
+        @test sol.u ≈ [1.0]
+        @test sol.objective ≈ 1.0
+        @test sol.objective == sq(sol.u, nothing)
+    end
+
     function hybrid(f, D; polish, local_opt = SimpleLBFGS())
         optf = OptimizationFunction{false}((x, p) -> f(x), Optimization.AutoForwardDiff())
         lb = SVector{D, Float64}(ntuple(_ -> -5.0, Val(D)))
@@ -133,16 +164,18 @@ end
     end
 
     # BBOB F13 (rotated sharp ridge): L-BFGS stalls short of the 1e-6 target, the polish
-    # finishes it.
+    # finishes it. The reported objective must be the objective at the returned point.
+    function solved_f13(sol, f)
+        fu = f(sol.u)
+        return sol.objective ≈ fu && all(-5 .≤ sol.u .≤ 5) && abs(fu - f.f_opt) < 1.0e-6
+    end
     Random.seed!(42)
     f13 = bbob_suite(Val(5); seed = 1)[13]
-    sol = hybrid(f13, 5; polish = NelderMeadPolish())
-    @test sol.objective - f13.f_opt < 1.0e-6
+    @test solved_f13(hybrid(f13, 5; polish = NelderMeadPolish()), f13)
 
     f13_3 = bbob_suite(Val(3); seed = 1)[13]
-    sol = hybrid(f13_3, 3; polish = NelderMeadPolish(; all_particles = true))
-    @test sol.objective - f13_3.f_opt < 1.0e-6
-
-    sol = hybrid(f13_3, 3; polish = NelderMeadPolish(), local_opt = PPS.BFGS())
-    @test sol.objective - f13_3.f_opt < 1.0e-6
+    @test solved_f13(hybrid(f13_3, 3; polish = NelderMeadPolish(; all_particles = true)), f13_3)
+    @test solved_f13(
+        hybrid(f13_3, 3; polish = NelderMeadPolish(), local_opt = PPS.BFGS()), f13_3
+    )
 end

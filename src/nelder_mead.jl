@@ -14,9 +14,10 @@ GPU kernels.
 - `maxiters`: Maximum Nelder-Mead iterations per run.
 - `reltol`: A run stops once the objective values on the simplex span less than
   `reltol * max(1, |f_best|)`.
-- `restarts`: Up to this many extra runs, each from a fresh simplex around the best point
-  so far, while they keep improving. Nelder-Mead's simplex can collapse short of a kinked
-  minimum; a fresh simplex gets it moving again.
+- `restarts`: Extra runs, each from a fresh simplex around the best point so far.
+  Nelder-Mead's simplex can collapse short of a kinked minimum, or fold onto a face of the
+  box; a fresh simplex gets it moving again. A run that does not improve makes the next
+  simplex ten times smaller.
 - `all_particles`: If `false`, polish only the best point after the local stage, on the
   host. If `true`, polish every particle's local result inside the local-stage kernel.
 """
@@ -60,10 +61,10 @@ end
 
 # Optim.jl's default affine simplex: vertex j moves coordinate j by 0.5 x0[j] + 0.025,
 # flipped inward when the bound would clamp it back onto x0.
-@inline function _nm_vertex(x0, j, lb, ub)
+@inline function _nm_vertex(x0, j, lb, ub, scale)
     T = eltype(x0)
-    h = T(0.5) * x0[j] + T(0.025)
-    h = iszero(h) ? T(0.025) : h
+    h = scale * (T(0.5) * x0[j] + T(0.025))
+    h = iszero(h) ? scale * T(0.025) : h
     v = _nm_project(_nm_setindex(x0, x0[j] + h, j), lb, ub)
     return v[j] == x0[j] ? _nm_project(_nm_setindex(x0, x0[j] - h, j), lb, ub) : v
 end
@@ -87,21 +88,28 @@ end
     nelder_mead(f, p, x0, lb, ub, maxiters, reltol, restarts = 0)
 
 Bound-projected Nelder-Mead from `x0` with the adaptive coefficients of Gao and Han (2012),
-restarted from the best point while that keeps improving. Returns the best point and its
-objective value.
+restarted `restarts` times from the best point, with a smaller simplex after a restart that
+does not improve. Returns the best point and its objective value.
 """
 @inline function nelder_mead(f, p, x0, lb, ub, maxiters, reltol, restarts = 0)
-    x, fx = _nelder_mead_run(f, p, x0, lb, ub, maxiters, reltol)
+    T = eltype(x0)
+    scale = one(T)
+    x, fx = _nelder_mead_run(f, p, x0, lb, ub, maxiters, reltol, scale)
     for _ in 1:restarts
-        xn, fn = _nelder_mead_run(f, p, x, lb, ub, maxiters, reltol)
-        fn < fx || break
-        x, fx = xn, fn
+        xn, fn = _nelder_mead_run(f, p, x, lb, ub, maxiters, reltol, scale)
+        if fn < fx
+            x, fx = xn, fn
+        else
+            # A restart that ties has collapsed the same way again (e.g. onto a face of
+            # the box); try a smaller simplex around the incumbent.
+            scale /= 10
+        end
     end
     return x, fx
 end
 
 @inline function _nelder_mead_run(
-        f, p, x0::SVector{N, T}, lb, ub, maxiters, reltol
+        f, p, x0::SVector{N, T}, lb, ub, maxiters, reltol, scale = one(T)
     ) where {N, T}
     α = one(T)
     β = one(T) + T(2) / N
@@ -111,7 +119,7 @@ end
 
     x0 = _nm_project(x0, lb, ub)
     simplex = SVector{N + 1}(
-        ntuple(j -> j == 1 ? x0 : _nm_vertex(x0, j - 1, lb, ub), Val(N + 1))
+        ntuple(j -> j == 1 ? x0 : _nm_vertex(x0, j - 1, lb, ub, scale), Val(N + 1))
     )
     fs = map(x -> _nm_value(f, x, p), simplex)
 

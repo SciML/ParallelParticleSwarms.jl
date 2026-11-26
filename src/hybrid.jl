@@ -32,7 +32,7 @@ end
 
 @kernel function simplebfgs_run!(
         grad_f, f_raw, p, x0s, result, result_fx, nlalg, maxiters, abstol, reltol,
-        lb, ub, polish
+        lb, ub, polish, project
     )
     i = @index(Global, Linear)
     @inbounds x0 = as_svector(x0s[i])
@@ -40,6 +40,12 @@ end
     sol = SciMLBase.solve(nlprob, nlalg; maxiters, abstol, reltol, grad_f = grad_f)
     u = as_svector(sol.u)
     T = eltype(u)
+    # The Broyden step is unbounded and can diverge (e.g. at a kink). With a polish, its
+    # result is ranked against feasible points, so fall back to the start point if it is not
+    # finite and bring it into the box (the projection can be the constrained optimum).
+    if project
+        u = _nm_project(all(isfinite, u) ? u : x0, lb, ub)
+    end
     u, v = polish_point(polish, f_raw, p, u, f_raw(u, p), lb, ub)
     @inbounds result[i] = u
     @inbounds result_fx[i] = (isnan(v) | !isfinite(v)) ? T(Inf) : convert(T, v)
@@ -83,7 +89,7 @@ function SciMLBase.solve!(
         grad_f, f_raw, p,
         x0s, result, result_fx,
         nlalg, local_maxiters, abstol, reltol,
-        lb, ub, _kernel_polish(polish);
+        lb, ub, _kernel_polish(polish), polish !== nothing;
         ndrange = n,
     )
     KernelAbstractions.synchronize(opt.backend)
