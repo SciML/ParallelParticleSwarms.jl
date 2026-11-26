@@ -202,7 +202,7 @@ end
         u, fx = similar(x0s), ParallelParticleSwarms.KernelAbstractions.allocate(backend, T, n)
         ParallelParticleSwarms.lbfgs_run!(backend)(
             ParallelParticleSwarms.as_svector_grad(raw), ridge, nothing, particles, u, fx, lb, ub, 100,
-            T(1.0e-8), T(1.0e-8), ls, ParallelParticleSwarms.SimpleOptimization.__get_threshold(SimpleLBFGS()), pol;
+            T(1.0e-8), T(1.0e-8), ls, Val(10), pol;
             ndrange = n
         )
         ParallelParticleSwarms.KernelAbstractions.synchronize(backend)
@@ -213,7 +213,7 @@ end
         ParallelParticleSwarms.simplebfgs_run!(backend)(
             ParallelParticleSwarms.as_svector_grad(ParallelParticleSwarms.BoundedGrad(raw, lb, ub)), ridge, nothing, x0s, u, fx,
             ParallelParticleSwarms.SimpleBroyden(; linesearch = ParallelParticleSwarms.StrongWolfeLineSearch()), 100,
-            T(1.0e-8), T(1.0e-8), lb, ub, pol, pol !== nothing;
+            T(1.0e-8), T(1.0e-8), lb, ub, pol, true;
             ndrange = n
         )
         ParallelParticleSwarms.KernelAbstractions.synchronize(backend)
@@ -222,6 +222,7 @@ end
     @testset "$name" for (name, run) in (("lbfgs_run!", lbfgs), ("simplebfgs_run!", broyden))
         _, base_fx = run(nothing)
         u, fx = run(polish)
+        @test all(isfinite, base_fx)
         @test any(>(1.0f-6), base_fx)
         @test all(x -> all(lb .≤ x .≤ ub), u)
         @test all(fx .≤ base_fx)
