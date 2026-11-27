@@ -18,6 +18,7 @@ import NonlinearSolveBase.Utils as NLBUtils
 import OptimizationBase
 import PrecompileTools: @compile_workload, @setup_workload
 import QuasiMonteCarlo
+import Random
 import QuasiMonteCarlo: LatinHypercubeSample, SamplingAlgorithm
 import SciMLBase
 import SciMLBase: ImmutableNonlinearProblem, NonlinearFunction, OptimizationFunction,

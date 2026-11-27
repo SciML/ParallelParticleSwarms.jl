@@ -38,30 +38,35 @@ const PSO_C2 = 1.4962f0
     return particle
 end
 
-# Competitive learning (Cheng & Jin, 2015). Each generation pairs the particles through a
-# random affine permutation σ(i) = (a (i - 1) + b) mod n, positions 2k and 2k + 1 forming a
-# pair (with odd n the last position sits out). The better particle of a pair keeps its place;
-# the other moves with the PSO update, learning from the winner (social term) and the swarm
-# mean x̄ (cognitive term) with random inertia: v ← r v + r' (x_winner - x) + φ r'' (x̄ - x).
-# Partners are read from `prev`, a snapshot of the generation, so both see the same costs.
+# Competitive learning (Cheng & Jin, 2015). Each generation pairs the particles at random
+# (`partner[i]`, or 0 for the one that sits out when n is odd). The better particle of a pair
+# keeps its place; the other moves with the PSO update, learning from the winner (social term)
+# and the swarm mean x̄ (cognitive term) with random inertia:
+# v ← r v + r' (x_winner - x) + φ r'' (x̄ - x). Pairs are ranked by (cost, index) with
+# `isless`, so ties and NaN costs still give exactly one loser. Partners are read from `prev`,
+# a snapshot of the generation, so both see the same costs; with constraints, both are scored
+# with generation `g`'s penalty weight before they are compared.
 const CSO_PHI = 0.05f0
 
-@inline function competitive_update(particle, i, (prev, x̄, a, ainv, b, refine), prob, opt)
-    n = length(prev)
-    k = mod(a * (i - 1) + b, n) ⊻ 1
-    k < n || return particle
-    @inbounds partner = prev[mod(ainv * (k - b), n) + 1]
-    S = typeof(particle.velocity)
-    partner.cost < particle.cost ||
-        return refine ? refine_winner(particle, prev, prob, i, opt) : particle
-    return update_particle_state(
-        particle, prob, partner, rand_static(S), CSO_PHI, one(eltype(S)), i, opt, x̄
-    )
+@inline function competitive_update(particle, i, (prev, partner, x̄, refine, g), prob, opt)
+    particle = rescore(particle, prob, g, opt, prob.f.cons)
+    @inbounds j = Int(partner[i])
+    j == 0 && return particle
+    @inbounds rival = score(prev[j], prob, g, opt, prob.f.cons)
+    if isless((rival.cost, j), (particle.cost, i))
+        S = typeof(particle.velocity)
+        particle = update_particle_state(
+            particle, prob, rival, rand_static(S), CSO_PHI, one(eltype(S)), g, opt, x̄
+        )
+        return record_best(particle)
+    end
+    return refine ? refine_winner(particle, prev, prob, g, opt) : particle
 end
 
-# Refinement runs: the winner tries x_a + (x_b - x_c) / 2 of three random particles, taking
-# each coordinate from it with probability 0.9 (and at least one), and keeps it if no worse.
-@inline function refine_winner(particle, prev, prob, i, opt)
+# Refinement runs: the winner forms x_a + (x_b - x_c) / 2 from three sampled particles, takes
+# one random coordinate from it and each other coordinate with probability 0.9, and moves
+# there if its cost is no greater.
+@inline function refine_winner(particle, prev, prob, g, opt)
     S = typeof(particle.position)
     T = eltype(S)
     n = length(prev)
@@ -71,13 +76,31 @@ end
     take = SVector(ntuple(d -> d == jr || rand(T) < T(0.9), Val(length(S))))
     trial = particle
     @set! trial.position = min.(max.(S(ifelse.(take, y, particle.position)), prob.lb), prob.ub)
-    trial = handle_constraints(trial, prob, i, opt)
-    trial.cost <= particle.cost || return particle
-    if trial.cost < trial.best_cost
-        @set! trial.best_position = trial.position
-        @set! trial.best_cost = trial.cost
+    trial = handle_constraints(trial, prob, g, opt)
+    isless(particle.cost, trial.cost) && return particle
+    return record_best(trial)
+end
+
+# Personal best ordered like the best-particle reduction (`isless`: NaN last), so a finite
+# cost replaces a NaN incumbent.
+@inline function record_best(particle)
+    if isless(particle.cost, particle.best_cost)
+        @set! particle.best_position = particle.position
+        @set! particle.best_cost = particle.cost
     end
-    return trial
+    return particle
+end
+
+# Costs under generation `g`'s penalty weight; without constraints the stored costs are exact.
+@inline score(particle, prob, g, opt, ::Nothing) = particle
+@inline score(particle, prob, g, opt, cons) = handle_constraints(particle, prob, g, opt)
+@inline rescore(particle, prob, g, opt, ::Nothing) = particle
+@inline function rescore(particle, prob, g, opt, cons)
+    particle = handle_constraints(particle, prob, g, opt)
+    best = particle
+    @set! best.position = particle.best_position
+    @set! particle.best_cost = handle_constraints(best, prob, g, opt).cost
+    return particle
 end
 
 @inline function handle_constraints(particle, prob, iter, opt)

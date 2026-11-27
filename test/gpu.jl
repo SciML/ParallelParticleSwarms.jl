@@ -208,10 +208,9 @@ end
         @test count(i -> after[i].position != before[i].position, 1:n) == n ÷ 2
     end
 
-    # Refinement runs: drawn per run; winners only take differential steps that are no
-    # worse, so at most the losers (n ÷ 2) can get worse in a generation.
+    # Refinement runs are drawn per run. Winners also move, but only to points that are no
+    # worse, so more than the losers move and at most the losers (n ÷ 2) get worse.
     @test !init(prob, ParallelSyncPSOKernel(10; backend, competitive = true)).refine
-    # The positional constructor from before these options keeps working.
     @test ParallelSyncPSOKernel(
         10, backend, ParallelParticleSwarms.θ_default,
         ParallelParticleSwarms.γ_default, sqrt, 256
@@ -224,6 +223,7 @@ end
         solve!(cache; maxiters = 1)
         after = Array(cache.particles)
         @test count(i -> after[i].cost > before[i].cost, 1:n) <= n ÷ 2
+        n == 1000 && @test count(i -> after[i].position != before[i].position, 1:n) > n ÷ 2
         reinit!(cache)
         @test cache.refine
     end
@@ -232,6 +232,90 @@ end
         maxiters = 1000
     )
     @test sol.objective < 1.0f-3
+
+    # Pairing: reciprocal, unrestricted, and exactly one particle sits out when n is odd.
+    PPS = ParallelParticleSwarms
+    pairing(n) = begin
+        cache = init(prob, ParallelSyncPSOKernel(n; backend, competitive = true))
+        buffers = PPS.competition_buffers(cache.alg, cache.particles)
+        () -> Array(PPS.competition(buffers, cache.particles, false, 1)[2])
+    end
+    draw = pairing(6)
+    met = Set{Int}()
+    for _ in 1:200
+        partner = draw()
+        @test all(i -> partner[partner[i]] == i, 1:6)
+        push!(met, partner[1])
+    end
+    @test met == Set(2:6)
+    partner = pairing(7)()
+    @test count(iszero, partner) == 1
+    @test all(i -> partner[i] == 0 || partner[partner[i]] == i, 1:7)
+    partner = pairing(50_000)()
+    @test all(i -> partner[partner[i]] == i, 1:50_000)
+
+    # Ties and NaN costs still give one loser per pair.
+    flat = OptimizationProblem{false}(
+        OptimizationFunction{false}((x, p) -> one(eltype(x))), x0, nothing; lb, ub
+    )
+    for n in (2, 3, 101)
+        cache = init(flat, ParallelSyncPSOKernel(n; backend, competitive = true))
+        before = Array(cache.particles)
+        solve!(cache; maxiters = 1)
+        after = Array(cache.particles)
+        @test count(i -> after[i].position != before[i].position, 1:n) == n ÷ 2
+    end
+    half(x, p) = x[1] < 0 ? oftype(x[1], NaN) : x[1]^2
+    lb1, ub1 = SVector{1, Float32}(-1), SVector{1, Float32}(1)
+    nanprob = OptimizationProblem{false}(
+        OptimizationFunction{false}(half), ub1, nothing; lb = lb1, ub = ub1
+    )
+    cache = init(nanprob, ParallelSyncPSOKernel(2; backend, competitive = true))
+    x1, x2 = SVector{1, Float32}(-0.9), SVector{1, Float32}(0.5)
+    copyto!(
+        cache.particles,
+        PPS.adapt(
+            backend, [
+                PPS.SPSOParticle(x1, zero(x1), NaN32, x1, NaN32),
+                PPS.SPSOParticle(x2, zero(x2), 0.25f0, x2, 0.25f0),
+            ]
+        )
+    )
+    solve!(cache; maxiters = 50)
+    particles = Array(cache.particles)
+    @test particles[1].position != x1
+    @test all(p -> isfinite(p.best_cost), particles)
+
+    # The swarm mean of large Float32 coordinates does not overflow.
+    big_lb = SVector{D, Float32}(ntuple(_ -> 1.0f37, Val(D)))
+    big_ub = SVector{D, Float32}(ntuple(_ -> 1.1f37, Val(D)))
+    big = OptimizationProblem{false}(
+        OptimizationFunction{false}((x, p) -> sum(x) * 1.0f-38), big_lb, nothing;
+        lb = big_lb, ub = big_ub
+    )
+    cache = init(big, ParallelSyncPSOKernel(64; backend, competitive = true))
+    buffers = PPS.competition_buffers(cache.alg, cache.particles)
+    x̄ = PPS.competition(buffers, cache.particles, false, 1)[3]
+    ref = Float32.(sum(p -> Float64.(p.position), Array(cache.particles)) ./ 64)
+    @test all(abs.(x̄ .- ref) .<= eps.(ref))
+    solve!(cache; maxiters = 1)
+    @test !any(p -> any(p.position .== big_ub), Array(cache.particles))
+
+    # With constraints, pairs are compared under one penalty weight per generation: an
+    # always-satisfied constraint adds the same penalty to every particle, so the swarm moves
+    # exactly as without it.
+    if GROUP == "CPU"
+        always(x, p) = SVector(-one(eltype(x)))
+        trajectory(f) = begin
+            Random.seed!(7)
+            q = OptimizationProblem{false}(f, x0, nothing; lb, ub)
+            cache = init(q, ParallelSyncPSOKernel(101; backend, competitive = true, refine = 1))
+            solve!(cache; maxiters = 5)
+            map(p -> p.position, Array(cache.particles))
+        end
+        @test trajectory(OptimizationFunction{false}(rastrigin)) ==
+            trajectory(OptimizationFunction{false}(rastrigin; cons = always))
+    end
 end
 
 @testset "Nelder-Mead polish inside the local-stage kernels" begin

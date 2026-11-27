@@ -104,12 +104,11 @@ after each generation to compute the global best position.
     meet in random pairs; the better one keeps its place and the other learns from it and
     from the swarm mean instead of from its personal best and the global best. Learning
     from any better peer keeps the swarm diverse on multimodal problems.
-- `refine`: With `competitive`, the probability that a run (each `init` or `reinit!`) is a
-    refinement run, in which the winner of each pair also tries the point
-    `x_a + (x_b - x_c) / 2` of three random particles, taking each coordinate from it with
-    probability 0.9, and moves there if that is no worse. Refinement runs converge
-    precisely on rugged, ill-conditioned problems; mixing them with plain runs across
-    restarts follows the two-regime restarts of BIPOP-CMA-ES.
+- `refine`: With `competitive = true`, the probability that each `init` or `reinit!` starts
+    a refinement run. The winner of each pair forms a differential point
+    `x_a + (x_b - x_c) / 2` from three sampled particles. The trial takes one randomly
+    selected coordinate from that point and each remaining coordinate from it with
+    probability 0.9. The winner accepts the trial if its cost is no greater.
 
 # Examples
 
@@ -221,7 +220,6 @@ function ParallelSyncPSOKernel(
     )
 end
 
-# Positional form from before `competitive` and `refine` were added.
 ParallelSyncPSOKernel(num_particles::Int, backend, θ, γ, h, workgroupsize::Int) =
     ParallelSyncPSOKernel(num_particles, backend, θ, γ, h, workgroupsize, false, 0.0)
 
