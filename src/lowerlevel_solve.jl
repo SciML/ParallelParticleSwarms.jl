@@ -21,10 +21,19 @@ function competition((prev, partner, host, order), particles, refine, g)
         host[order[k + 1]] = order[k]
     end
     copyto!(partner, host)
-    # Float64 sum of x / n, so the mean cannot overflow.
+    return (prev, partner, swarm_mean(particles), refine, g)
+end
+
+# Mean position, summed so that it cannot overflow: in Float64 for narrower element types,
+# otherwise relative to each coordinate's largest magnitude.
+function swarm_mean(particles)
     S = fieldtype(eltype(particles), :position)
-    x̄ = S(sum(p -> Float64.(p.position) ./ n, particles))
-    return (prev, partner, x̄, refine, g)
+    n = length(particles)
+    eltype(S) <: Union{Float16, Float32} &&
+        return S(sum(p -> Float64.(p.position), particles) ./ n)
+    scale = mapreduce(p -> abs.(p.position), (a, b) -> max.(a, b), particles; init = zero(S))
+    unit = ifelse.(isfinite.(scale) .& (scale .> 0), scale, one(eltype(S)))
+    return S(clamp.(sum(p -> p.position ./ unit, particles) ./ n, -1, 1) .* scale)
 end
 
 function vectorized_solve!(

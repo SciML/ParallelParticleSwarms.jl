@@ -238,6 +238,37 @@ end
     _, after, _ = step(big, 64)
     @test !any(p -> any(p.position .== big_ub), after)
 
+    # Nor does the mean of identical Float64 coordinates next to the largest finite value.
+    S2 = SVector{2, Float64}
+    swarm(xs) = PPS.adapt(backend, [PPS.SPSOParticle(x, zero(x), 1.0, x, 1.0) for x in xs])
+    xmax = S2(1, -1) .* prevfloat(floatmax(Float64))
+    huge = OptimizationProblem{false}(
+        OptimizationFunction{false}((x, p) -> one(eltype(x))), xmax, nothing;
+        lb = S2(0, -floatmax(Float64)), ub = S2(floatmax(Float64), 0)
+    )
+    cache = init(huge, kernel(17))
+    copyto!(cache.particles, swarm(fill(xmax, 17)))
+    @test PPS.swarm_mean(cache.particles) == xmax
+    solve!(cache; maxiters = 1)
+    @test all(p -> p.position == xmax, Array(cache.particles))
+    @test PPS.swarm_mean(swarm([S2(0, y) for y in (-1, 0.5, 0.25, 0.25)])) == S2(0, 0)
+
+    # A penalty weight that reorders a particle's two points makes the cheaper one its best.
+    S1 = SVector{1, Float32}
+    reorder = OptimizationProblem{false}(
+        OptimizationFunction{false}((x, p) -> 2.5f0 * (1 - x[1]); cons = (x, p) -> x), S1(0), nothing;
+        lb = S1(0), ub = S1(1)
+    )
+    function best(generations)
+        c = init(reorder, kernel(1; θ = one, γ = one, h = identity))
+        copyto!(c.particles, PPS.adapt(backend, [PPS.SPSOParticle(S1(0), S1(0), 3.5f0, S1(1), 2.0f0)]))
+        sol = solve!(c; maxiters = generations)
+        q = Array(c.particles)[1]
+        return q.best_position[1], q.best_cost, sol.u[1]
+    end
+    @test best(1) == (1, 4, 1)
+    @test best(2) == (0, 5.5, 0)
+
     # An always-satisfied constraint does not change the trajectory.
     if GROUP == "CPU"
         trajectory(p) = (Random.seed!(7); c = init(p, kernel(101; refine = 1)); solve!(c; maxiters = 5); map(q -> q.position, Array(c.particles)))

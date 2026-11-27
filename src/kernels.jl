@@ -82,7 +82,8 @@ end
     return particle
 end
 
-# Cost under generation `g`'s penalty weight (no-op without constraints).
+# Cost under generation `g`'s penalty weight (no-op without constraints). The weight can
+# reorder a particle's two points, so `rescore` also records the cheaper one as its best.
 @inline score(particle, prob, g, opt, ::Nothing) = particle
 @inline score(particle, prob, g, opt, cons) = handle_constraints(particle, prob, g, opt)
 @inline rescore(particle, prob, g, opt, ::Nothing) = particle
@@ -91,7 +92,7 @@ end
     best = particle
     @set! best.position = particle.best_position
     @set! particle.best_cost = handle_constraints(best, prob, g, opt).cost
-    return particle
+    return record_best(particle)
 end
 
 @inline function handle_constraints(particle, prob, iter, opt)
