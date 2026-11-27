@@ -124,6 +124,7 @@ function Base.typemax(::Type{ParallelParticleSwarms.SPSOGBest{T1, T2}}) where {T
     )
 end
 
+include("./nelder_mead.jl")
 include("./algorithms.jl")
 include("./utils.jl")
 include("./ode_pso.jl")
@@ -138,7 +139,7 @@ include("./precompilation.jl")
 
 export ParallelPSOKernel,
     ParallelSyncPSOKernel, ParallelPSOArray, SerialPSO, PSOAlgorithm, HybridPSO,
-    SimpleLBFGS, BFGS, pso_solve
+    SimpleLBFGS, BFGS, NelderMeadPolish, pso_solve
 
 # Reexported SciML common optimization interface; approved via `reexports_allow` in
 # test/qa/qa.jl.
