@@ -199,7 +199,7 @@ end
     )
     @test sol.objective < 1.0f-3
 
-    # Each generation the particles meet in pairs and only the loser of a pair moves.
+    # Only the loser of each pair moves.
     for n in (2, 3, 101, 1000)
         cache = init(prob, ParallelSyncPSOKernel(n; backend, competitive = true))
         before = Array(cache.particles)
@@ -208,8 +208,7 @@ end
         @test count(i -> after[i].position != before[i].position, 1:n) == n ÷ 2
     end
 
-    # Refinement runs are drawn per run. Winners also move, but only to points that are no
-    # worse, so more than the losers move and at most the losers (n ÷ 2) get worse.
+    # Refinement: winners also move, never to worse points.
     @test !init(prob, ParallelSyncPSOKernel(10; backend, competitive = true)).refine
     @test ParallelSyncPSOKernel(
         10, backend, ParallelParticleSwarms.θ_default,
@@ -233,7 +232,7 @@ end
     )
     @test sol.objective < 1.0f-3
 
-    # Pairing: reciprocal, unrestricted, and exactly one particle sits out when n is odd.
+    # Pairs are reciprocal and unrestricted; one particle sits out when n is odd.
     PPS = ParallelParticleSwarms
     pairing(n) = begin
         cache = init(prob, ParallelSyncPSOKernel(n; backend, competitive = true))
@@ -254,7 +253,7 @@ end
     partner = pairing(50_000)()
     @test all(i -> partner[partner[i]] == i, 1:50_000)
 
-    # Ties and NaN costs still give one loser per pair.
+    # Ties and NaN costs still give one loser.
     flat = OptimizationProblem{false}(
         OptimizationFunction{false}((x, p) -> one(eltype(x))), x0, nothing; lb, ub
     )
@@ -286,7 +285,7 @@ end
     @test particles[1].position != x1
     @test all(p -> isfinite(p.best_cost), particles)
 
-    # The swarm mean of large Float32 coordinates does not overflow.
+    # The swarm mean must not overflow.
     big_lb = SVector{D, Float32}(ntuple(_ -> 1.0f37, Val(D)))
     big_ub = SVector{D, Float32}(ntuple(_ -> 1.1f37, Val(D)))
     big = OptimizationProblem{false}(
@@ -301,9 +300,7 @@ end
     solve!(cache; maxiters = 1)
     @test !any(p -> any(p.position .== big_ub), Array(cache.particles))
 
-    # With constraints, pairs are compared under one penalty weight per generation: an
-    # always-satisfied constraint adds the same penalty to every particle, so the swarm moves
-    # exactly as without it.
+    # An always-satisfied constraint must not change the trajectory.
     if GROUP == "CPU"
         always(x, p) = SVector(-one(eltype(x)))
         trajectory(f) = begin

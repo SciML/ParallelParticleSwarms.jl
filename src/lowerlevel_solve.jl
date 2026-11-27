@@ -2,8 +2,6 @@
     return max(1, min(Int(n), opt.workgroupsize))
 end
 
-# Buffers for competitive generations: a snapshot of the swarm, partner indices on the
-# device, and host scratch for drawing the pairing.
 function competition_buffers(opt, particles)
     opt.competitive || return nothing
     n = length(particles)
@@ -11,8 +9,7 @@ function competition_buffers(opt, particles)
     return (similar(particles), partner, Vector{Int32}(undef, n), Vector{Int}(undef, n))
 end
 
-# Snapshot, swarm mean and random pairing for competitive generation `g` (see
-# `competitive_update`); `nothing` for the standard PSO update.
+# Snapshot, mean and random pairs for generation `g`; `nothing` for standard PSO.
 competition(::Nothing, particles, refine, g) = nothing
 function competition((prev, partner, host, order), particles, refine, g)
     copyto!(prev, particles)
@@ -24,7 +21,7 @@ function competition((prev, partner, host, order), particles, refine, g)
         host[order[k + 1]] = order[k]
     end
     copyto!(partner, host)
-    # Sum x / n in Float64 so the mean of large coordinates cannot overflow.
+    # Float64 sum of x / n, so the mean cannot overflow.
     S = fieldtype(eltype(particles), :position)
     x̄ = S(sum(p -> Float64.(p.position) ./ n, particles))
     return (prev, partner, x̄, refine, g)

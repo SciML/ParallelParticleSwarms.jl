@@ -38,14 +38,8 @@ const PSO_C2 = 1.4962f0
     return particle
 end
 
-# Competitive learning (Cheng & Jin, 2015). Each generation pairs the particles at random
-# (`partner[i]`, or 0 for the one that sits out when n is odd). The better particle of a pair
-# keeps its place; the other moves with the PSO update, learning from the winner (social term)
-# and the swarm mean x̄ (cognitive term) with random inertia:
-# v ← r v + r' (x_winner - x) + φ r'' (x̄ - x). Pairs are ranked by (cost, index) with
-# `isless`, so ties and NaN costs still give exactly one loser. Partners are read from `prev`,
-# a snapshot of the generation, so both see the same costs; with constraints, both are scored
-# with generation `g`'s penalty weight before they are compared.
+# Competitive learning (Cheng & Jin, 2015): in each random pair the loser learns from the
+# winner and the swarm mean. `prev` is the generation's snapshot, so both see the same costs.
 const CSO_PHI = 0.05f0
 
 @inline function competitive_update(particle, i, (prev, partner, x̄, refine, g), prob, opt)
@@ -63,9 +57,7 @@ const CSO_PHI = 0.05f0
     return refine ? refine_winner(particle, prev, prob, g, opt) : particle
 end
 
-# Refinement runs: the winner forms x_a + (x_b - x_c) / 2 from three sampled particles, takes
-# one random coordinate from it and each other coordinate with probability 0.9, and moves
-# there if its cost is no greater.
+# Refinement runs: the winner tries a differential point and keeps it if no worse.
 @inline function refine_winner(particle, prev, prob, g, opt)
     S = typeof(particle.position)
     T = eltype(S)
@@ -81,8 +73,7 @@ end
     return record_best(trial)
 end
 
-# Personal best ordered like the best-particle reduction (`isless`: NaN last), so a finite
-# cost replaces a NaN incumbent.
+# `isless` orders NaN last, so a finite cost replaces a NaN best.
 @inline function record_best(particle)
     if isless(particle.cost, particle.best_cost)
         @set! particle.best_position = particle.position
@@ -91,7 +82,7 @@ end
     return particle
 end
 
-# Costs under generation `g`'s penalty weight; without constraints the stored costs are exact.
+# Cost under generation `g`'s penalty weight (no-op without constraints).
 @inline score(particle, prob, g, opt, ::Nothing) = particle
 @inline score(particle, prob, g, opt, cons) = handle_constraints(particle, prob, g, opt)
 @inline rescore(particle, prob, g, opt, ::Nothing) = particle
