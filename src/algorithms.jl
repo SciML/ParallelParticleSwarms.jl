@@ -84,7 +84,7 @@ end
 
 """
     ParallelSyncPSOKernel(num_particles; backend = CPU(), θ = θ_default,
-        γ = γ_default, h = sqrt, workgroupsize = 256)
+        γ = γ_default, h = sqrt, workgroupsize = 256, competitive = false, refine = 0)
 
 Particle Swarm Optimization that updates particles in parallel and synchronizes
 after each generation to compute the global best position.
@@ -100,6 +100,15 @@ after each generation to compute the global best position.
 - `γ`: PSO velocity update coefficient schedule.
 - `h`: Transformation applied in the update rule.
 - `workgroupsize`: KernelAbstractions workgroup size. Defaults to 256.
+- `competitive`: Competitive learning (Cheng & Jin, 2015). Each generation the particles
+    meet in random pairs; the better one keeps its place and the other learns from it and
+    from the swarm mean instead of from its personal best and the global best. Learning
+    from any better peer keeps the swarm diverse on multimodal problems.
+- `refine`: With `competitive = true`, the probability that each `init` or `reinit!` starts
+    a refinement run. The winner of each pair forms a differential point
+    `x_a + (x_b - x_c) / 2` from three sampled particles. The trial takes one randomly
+    selected coordinate from that point and each remaining coordinate from it with
+    probability 0.9. The winner accepts the trial if its cost is no greater.
 
 # Examples
 
@@ -118,6 +127,8 @@ struct ParallelSyncPSOKernel{Backend, T, G, H} <: PSOAlgorithm
     γ::G
     h::H
     workgroupsize::Int
+    competitive::Bool
+    refine::Float64
 end
 
 """
@@ -202,10 +213,15 @@ end
 function ParallelSyncPSOKernel(
         num_particles::Int;
         backend = CPU(), θ = θ_default, γ = γ_default, h = sqrt,
-        workgroupsize = 256
+        workgroupsize = 256, competitive = false, refine = 0
     )
-    return ParallelSyncPSOKernel(num_particles, backend, θ, γ, h, workgroupsize)
+    return ParallelSyncPSOKernel(
+        num_particles, backend, θ, γ, h, workgroupsize, competitive, Float64(refine)
+    )
 end
+
+ParallelSyncPSOKernel(num_particles::Int, backend, θ, γ, h, workgroupsize::Int) =
+    ParallelSyncPSOKernel(num_particles, backend, θ, γ, h, workgroupsize, false, 0.0)
 
 function ParallelPSOArray(num_particles::Int; θ = θ_default, γ = γ_default, h = sqrt)
     return ParallelPSOArray(num_particles, θ, γ, h)

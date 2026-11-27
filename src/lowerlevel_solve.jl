@@ -2,6 +2,40 @@
     return max(1, min(Int(n), opt.workgroupsize))
 end
 
+function competition_buffers(opt, particles)
+    opt.competitive || return nothing
+    n = length(particles)
+    partner = KernelAbstractions.allocate(get_backend(particles), Int32, n)
+    return (similar(particles), partner, Vector{Int32}(undef, n), Vector{Int}(undef, n))
+end
+
+# Snapshot, mean and random pairs for generation `g`; `nothing` for standard PSO.
+competition(::Nothing, particles, refine, g) = nothing
+function competition((prev, partner, host, order), particles, refine, g)
+    copyto!(prev, particles)
+    n = length(particles)
+    Random.randperm!(order)
+    fill!(host, Int32(0))
+    for k in 1:2:(n - 1)
+        host[order[k]] = order[k + 1]
+        host[order[k + 1]] = order[k]
+    end
+    copyto!(partner, host)
+    return (prev, partner, swarm_mean(particles), refine, g)
+end
+
+# Mean position, summed so that it cannot overflow: in Float64 for narrower element types,
+# otherwise relative to each coordinate's largest magnitude.
+function swarm_mean(particles)
+    S = fieldtype(eltype(particles), :position)
+    n = length(particles)
+    eltype(S) <: Union{Float16, Float32} &&
+        return S(sum(p -> Float64.(p.position), particles) ./ n)
+    scale = mapreduce(p -> abs.(p.position), (a, b) -> max.(a, b), particles; init = zero(S))
+    unit = ifelse.(isfinite.(scale) .& (scale .> 0), scale, one(eltype(S)))
+    return S(clamp.(sum(p -> p.position ./ unit, particles) ./ n, -1, 1) .* scale)
+end
+
 function vectorized_solve!(
         prob,
         gbest,
@@ -9,7 +43,8 @@ function vectorized_solve!(
         maxiters = 100,
         w = 0.7298f0,
         wdamp = 1.0f0,
-        debug = false
+        debug = false,
+        refine = false
     )
     backend = get_backend(gpu_particles)
 
@@ -24,12 +59,13 @@ function vectorized_solve!(
         typeof(gbest),
         cld(length(gpu_particles), ws)
     )
+    buffers = competition_buffers(opt, gpu_particles)
     for i in 1:maxiters
         update_particle_kernel(
             prob,
             gpu_particles, block_particles,
             gbest,
-            w, opt;
+            w, opt, competition(buffers, gpu_particles, refine, i);
             ndrange = padded_ndrange
         )
         gbest = _best_particle(block_particles)
@@ -46,18 +82,20 @@ function vectorized_solve!(
         maxiters = 100,
         w = 0.7298f0,
         wdamp = 1.0f0,
-        debug = false
+        debug = false,
+        refine = false
     ) where {Backend <: CPU, T, G, H}
     backend = get_backend(gpu_particles)
 
     update_particle_kernel = update_particle_states!(backend)
 
+    buffers = competition_buffers(opt, gpu_particles)
     for i in 1:maxiters
         update_particle_kernel(
             prob,
             gpu_particles,
             gbest,
-            w, opt;
+            w, opt, competition(buffers, gpu_particles, refine, i);
             ndrange = length(gpu_particles)
         )
         best_particle = _best_particle(gpu_particles)

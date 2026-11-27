@@ -4,7 +4,15 @@ mutable struct PSOCache{TP, TAlg, TPart, TGbest, TSampler}
     particles::TPart
     gbest::TGbest
     sampler::TSampler
+    refine::Bool    # whether this run is a refinement run (competitive learning)
 end
+
+PSOCache{TP, TAlg, TPart, TGbest, TSampler}(prob, alg, particles, gbest, sampler) where {
+    TP, TAlg, TPart, TGbest, TSampler,
+} = PSOCache{TP, TAlg, TPart, TGbest, TSampler}(prob, alg, particles, gbest, sampler, false)
+
+draw_refine(opt::ParallelSyncPSOKernel) = opt.competitive && rand() < opt.refine
+draw_refine(opt) = false
 
 struct HybridPSOCache{TPc, TSp, TAlg}
     pso_cache::TPc
@@ -81,7 +89,7 @@ function SciMLBase.init(
     return PSOCache{
         typeof(prob), typeof(opt), typeof(particles), typeof(init_gbest), typeof(_sampler),
     }(
-        prob, opt, particles, init_gbest, _sampler
+        prob, opt, particles, init_gbest, _sampler, draw_refine(opt)
     )
 end
 
@@ -110,7 +118,7 @@ function SciMLBase.init(
     return PSOCache{
         typeof(prob), typeof(opt), typeof(particles), typeof(init_gbest), typeof(_sampler),
     }(
-        prob, opt, particles, init_gbest, _sampler
+        prob, opt, particles, init_gbest, _sampler, draw_refine(opt)
     )
 end
 
@@ -136,6 +144,7 @@ function reinit_cache!(cache::PSOCache, opt::ParallelSyncPSOKernel)
     particles, init_gbest = __init!(particles, prob, opt, cache.sampler)
 
     cache.gbest = init_gbest
+    cache.refine = draw_refine(opt)
 
     return nothing
 end

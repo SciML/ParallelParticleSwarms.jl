@@ -68,6 +68,7 @@ end
         prob = OptimizationProblem{false}(optf, x0, nothing; lb, ub)
         for opt in (
                 ParallelSyncPSOKernel(n_particles; backend),
+                ParallelSyncPSOKernel(n_particles; backend, competitive = true),
                 ParallelPSOKernel(n_particles; backend, global_update = true),
                 # Ragged population: the last workgroup is only partly filled.
                 ParallelPSOKernel(257; backend, global_update = false),
@@ -137,6 +138,7 @@ end
     for opt in (
             ParallelSyncPSOKernel(64; backend, workgroupsize = 64),
             ParallelSyncPSOKernel(100; backend, workgroupsize = 32),
+            ParallelSyncPSOKernel(100; backend, workgroupsize = 32, competitive = true),
             ParallelPSOKernel(100; backend, global_update = true, workgroupsize = 32),
             ParallelPSOKernel(100; backend, global_update = false, workgroupsize = 32),
         )
@@ -157,6 +159,7 @@ end
             n in (10, 100, 5000),
             opt_f in (
                 n -> ParallelSyncPSOKernel(n; backend),
+                n -> ParallelSyncPSOKernel(n; backend, competitive = true),
                 n -> ParallelPSOKernel(n; backend, global_update = true),
                 n -> ParallelPSOKernel(n; backend, global_update = false),
             )
@@ -172,6 +175,104 @@ end
         @test sol.u in minimizers
         # host f vs FMA-contracted kernel cost: each n-term sum of squares is within n*eps/2
         @test isapprox(sol.objective, best_cost; rtol = length(sol.u) * eps())
+    end
+end
+
+@testset "competitive learning" begin
+    Random.seed!(1234)
+    PPS = ParallelParticleSwarms
+    D = 5
+    rastrigin(x, p) = 10length(x) + sum(x .^ 2 .- 10 .* cos.(2.0f0 * Float32(π) .* x))
+    lb = SVector{D, Float32}(ntuple(_ -> -5.12f0, Val(D)))
+    ub = -lb
+    problem(f; kw...) = OptimizationProblem{false}(OptimizationFunction{false}(f; kw...), ub ./ 5, nothing; lb, ub)
+    prob = problem(rastrigin)
+    kernel(n; kw...) = ParallelSyncPSOKernel(n; backend, competitive = true, kw...)
+    function step(prob, n; kw...)
+        cache = init(prob, kernel(n; kw...))
+        before = Array(cache.particles)
+        solve!(cache; maxiters = 1)
+        return before, Array(cache.particles), cache
+    end
+    moved(before, after) = count(i -> before[i].position != after[i].position, eachindex(before))
+
+    for refine in (0, 1)
+        @test solve(prob, kernel(1000; refine); maxiters = 1000).objective < 1.0f-3
+    end
+    hybrid = PPS.HybridPSO(; pso = kernel(1000), backend)
+    @test solve(prob, hybrid; maxiters = 100, local_maxiters = 100).objective < 1.0f-3
+    @test ParallelSyncPSOKernel(10, backend, PPS.θ_default, PPS.γ_default, sqrt, 256) ==
+        ParallelSyncPSOKernel(10; backend)
+
+    # Only losers move, also when costs tie; refinement also moves winners, never to worse points.
+    for n in (2, 3, 101, 1000), p in (prob, problem((x, p) -> one(eltype(x))))
+        @test moved(step(p, n)[1:2]...) == n ÷ 2
+    end
+    before, after, cache = step(prob, 1000; refine = 1)
+    @test moved(before, after) > 500
+    @test count(i -> after[i].cost > before[i].cost, 1:1000) <= 500
+    @test cache.refine && !init(prob, kernel(10)).refine
+
+    # Pairs are reciprocal and unrestricted; one particle sits out when n is odd.
+    pairs(n) = (c = init(prob, kernel(n)); Array(PPS.competition(PPS.competition_buffers(c.alg, c.particles), c.particles, false, 1)[2]))
+    @test Set(pairs(6)[1] for _ in 1:200) == Set(2:6)
+    @test count(iszero, pairs(7)) == 1
+    partner = pairs(50_000)
+    @test all(i -> partner[partner[i]] == i, eachindex(partner))
+
+    # A NaN particle loses and recovers.
+    x1, x2 = SVector{1, Float32}(-0.9), SVector{1, Float32}(0.5)
+    nanprob = OptimizationProblem{false}(
+        OptimizationFunction{false}((x, p) -> x[1] < 0 ? NaN32 : x[1]^2), x2, nothing;
+        lb = SVector{1, Float32}(-1), ub = SVector{1, Float32}(1)
+    )
+    cache = init(nanprob, kernel(2))
+    fixture = [PPS.SPSOParticle(x1, zero(x1), NaN32, x1, NaN32), PPS.SPSOParticle(x2, zero(x2), 0.25f0, x2, 0.25f0)]
+    copyto!(cache.particles, PPS.adapt(backend, fixture))
+    solve!(cache; maxiters = 50)
+    @test all(p -> isfinite(p.best_cost), Array(cache.particles))
+
+    # The swarm mean of large coordinates does not overflow.
+    big_lb, big_ub = 1.0f37 .+ zero(lb), 1.1f37 .+ zero(lb)
+    big = OptimizationProblem{false}(OptimizationFunction{false}((x, p) -> sum(x) * 1.0f-38), big_lb, nothing; lb = big_lb, ub = big_ub)
+    _, after, _ = step(big, 64)
+    @test !any(p -> any(p.position .== big_ub), after)
+
+    # Nor does the mean of identical Float64 coordinates next to the largest finite value.
+    S2 = SVector{2, Float64}
+    swarm(xs) = PPS.adapt(backend, [PPS.SPSOParticle(x, zero(x), 1.0, x, 1.0) for x in xs])
+    xmax = S2(1, -1) .* prevfloat(floatmax(Float64))
+    huge = OptimizationProblem{false}(
+        OptimizationFunction{false}((x, p) -> one(eltype(x))), xmax, nothing;
+        lb = S2(0, -floatmax(Float64)), ub = S2(floatmax(Float64), 0)
+    )
+    cache = init(huge, kernel(17))
+    copyto!(cache.particles, swarm(fill(xmax, 17)))
+    @test PPS.swarm_mean(cache.particles) == xmax
+    solve!(cache; maxiters = 1)
+    @test all(p -> p.position == xmax, Array(cache.particles))
+    @test PPS.swarm_mean(swarm([S2(0, y) for y in (-1, 0.5, 0.25, 0.25)])) == S2(0, 0)
+
+    # A penalty weight that reorders a particle's two points makes the cheaper one its best.
+    S1 = SVector{1, Float32}
+    reorder = OptimizationProblem{false}(
+        OptimizationFunction{false}((x, p) -> 2.5f0 * (1 - x[1]); cons = (x, p) -> x), S1(0), nothing;
+        lb = S1(0), ub = S1(1)
+    )
+    function best(generations)
+        c = init(reorder, kernel(1; θ = one, γ = one, h = identity))
+        copyto!(c.particles, PPS.adapt(backend, [PPS.SPSOParticle(S1(0), S1(0), 3.5f0, S1(1), 2.0f0)]))
+        sol = solve!(c; maxiters = generations)
+        q = Array(c.particles)[1]
+        return q.best_position[1], q.best_cost, sol.u[1]
+    end
+    @test best(1) == (1, 4, 1)
+    @test best(2) == (0, 5.5, 0)
+
+    # An always-satisfied constraint does not change the trajectory.
+    if GROUP == "CPU"
+        trajectory(p) = (Random.seed!(7); c = init(p, kernel(101; refine = 1)); solve!(c; maxiters = 5); map(q -> q.position, Array(c.particles)))
+        @test trajectory(prob) == trajectory(problem(rastrigin; cons = (x, p) -> SVector(-one(eltype(x)))))
     end
 end
 

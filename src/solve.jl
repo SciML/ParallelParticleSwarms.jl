@@ -46,6 +46,7 @@ function SciMLBase.solve!(
         opt,
         args...;
         maxiters,
+        refine = cache.refine,
         kwargs...
     )
     t1 = time()
